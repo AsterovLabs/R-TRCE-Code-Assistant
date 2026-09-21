@@ -26,7 +26,13 @@ R-TRCE Code Assistant/
 │   ├── validator.R         # Trace integrity and coverage auditing
 │   ├── explain.R           # Plain text/Markdown explanation and JSON export
 │   ├── pedagogy.R          # Student tutor, pitfall sentinel, pipe/formula deconstruction & quizzes
-│   └── runtime.R           # Live R session: evaluation, console capture, workspace and plots
+│   ├── runtime.R           # Live R session: evaluation, console capture, workspace and plots
+│   ├── editor_ops.R        # Editable-document logic: statement at a cursor, line counting, console history
+│   ├── studio_editor.R     # Studio pane: source editor bound to the working document (+ Run / Save)
+│   └── studio_console.R    # Studio pane: interactive console, transcript and session controls
+├── www/                    # Vendored browser assets served by Shiny
+│   ├── rtrce-editor.js     # CodeMirror <-> Shiny bridge (edit, run, history, gutter hints)
+│   └── codemirror/         # CodeMirror 5.65.16 + R mode + addons (MIT; see its LICENSE)
 └── tests/
     └── test_r_trce.R       # Automated test suite running against synthetic and real R scripts
 
@@ -63,6 +69,9 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-rparse-013` | R-TRCE Code Assistant Engine / Pedagogical & Educational Subsystem | Deconstructs R ASTs into beginner-friendly explanations, audits student pitfalls, visualizes pipelines/formulas, and synthesizes quizzes | `R/pedagogy.R` (`detect_student_pitfalls`, `deconstruct_pipes`, `deconstruct_formulas`, `generate_student_explanation`, `generate_student_quiz`) |
 | `trce-rparse-014` | R-TRCE Code Assistant Engine / Shared Infrastructure | Provides the canonical shared helpers used by every entry point: `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest, and encoding-tolerant source reading | `R/common.R` (`%||%`, `get_script_dir`, `is_annotatable_component`, `select_annotatable_components`, `max_existing_trace_number`, `read_source_lines`, `required_packages`, `missing_packages`) |
 | `trce-rparse-015` | R-TRCE Code Assistant Engine / Live Session Runtime | Evaluates user-submitted R code in a persistent environment and captures the console transcript, value types, warnings, errors and rendered plots | `R/runtime.R` (`new_r_session`, `session_evaluate`, `evaluate_with_capture`) |
+| `trce-rparse-016` | R-TRCE Code Assistant Engine / Editor Operations | Resolves the code a "run this" gesture should execute and walks console history, without depending on shiny or the browser | `R/editor_ops.R` (`statement_code_at`, `history_step`, `count_lines`) |
+| `trce-rparse-017` | R-TRCE Code Assistant Studio / Source Editor Pane | Two-way binding between the browser editor and the Studio's working document, plus Run / Run All / Save | `R/studio_editor.R` (`studio_editor_ui`, `studio_editor_server`) |
+| `trce-rparse-018` | R-TRCE Code Assistant Studio / Console Pane | Interactive R console sharing the editor's live session, with command history, transcript and environment reporting | `R/studio_console.R` (`studio_console_ui`, `studio_console_server`) |
 
 ### 2.2 Component-level Trace Index
 
@@ -71,10 +80,20 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-cli-001` | `usage()` | cli_dispatcher | `r_trce.R` (L54-L112) |
 | `trce-cli-002` | `run_doctor()` | utility_function | `r_trce.R` (L402-L480) |
 | `trce-cli-003` | `interactive_guard()` | cli_entrypoint | `r_trce.R` (L491-L493) |
-| `trce-studio-001` | `discover_sample_files()` | utility_function | `app.R` (L114-L135) |
-| `trce-studio-002` | `ui()` | shiny_ui | `app.R` (L180-L343) |
-| `trce-studio-003` | `server()` | shiny_server | `app.R` (L355-L1047) |
-| `trce-studio-004` | `interactive_guard()` | cli_entrypoint | `app.R` (L1061-L1098) |
+| `trce-studio-001` | `discover_sample_files()` | utility_function | `app.R` (L205-L226) |
+| `trce-studio-002` | `ui()` | shiny_ui | `app.R` (L271-L471) |
+| `trce-studio-003` | `server()` | shiny_server | `app.R` (L483-L1269) |
+| `trce-studio-004` | `interactive_guard()` | cli_entrypoint | `app.R` (L1283-L1336) |
+| `trce-studio-005` | `studio_bind_host()` | utility_function | `app.R` (L115-L124) |
+| `trce-studio-006` | `register_studio_assets()` | utility_function | `app.R` (L145-L152) |
+| `trce-studio-007` | `studio_asset_version()` | utility_function | `app.R` (L172-L181) |
+| `trce-editor-001` | `statement_code_at()` | utility_function | `R/editor_ops.R` (L56-L100) |
+| `trce-editor-002` | `history_step()` | utility_function | `R/editor_ops.R` (L148-L173) |
+| `trce-editor-003` | `count_lines()` | utility_function | `R/editor_ops.R` (L121-L126) |
+| `trce-ui-editor-001` | `studio_editor_ui()` | shiny_ui | `R/studio_editor.R` (L45-L90) |
+| `trce-ui-editor-002` | `studio_editor_server()` | shiny_server | `R/studio_editor.R` (L112-L220) |
+| `trce-ui-console-001` | `studio_console_ui()` | shiny_ui | `R/studio_console.R` (L46-L90) |
+| `trce-ui-console-002` | `studio_console_server()` | shiny_server | `R/studio_console.R` (L110-L185) |
 | `trce-common-001` | `or_default()` | utility_function | `R/common.R` (L52-L56) |
 | `trce-common-002` | `get_script_dir()` | cli_dispatcher | `R/common.R` (L74-L82) |
 | `trce-common-003` | `is_annotatable_component()` | utility_function | `R/common.R` (L103-L106) |
@@ -118,11 +137,11 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-runtime-002` | `session_is_incomplete()` | utility_function | `R/runtime.R` (L194-L205) |
 | `trce-runtime-003` | `preview_value()` | utility_function | `R/runtime.R` (L217-L234) |
 | `trce-runtime-004` | `session_workspace()` | data_pipeline | `R/runtime.R` (L247-L269) |
-| `trce-runtime-005` | `evaluate_with_capture()` | data_pipeline | `R/runtime.R` (L291-L399) |
-| `trce-runtime-006` | `session_evaluate()` | data_pipeline | `R/runtime.R` (L417-L485) |
+| `trce-runtime-005` | `evaluate_with_capture()` | data_pipeline | `R/runtime.R` (L291-L402) |
+| `trce-runtime-006` | `session_evaluate()` | data_pipeline | `R/runtime.R` (L420-L488) |
 | `trce-runtime-007` | `session_set_wd()` | utility_function | `R/runtime.R` (L161-L174) |
 | `trce-runtime-008` | `session_reset()` | utility_function | `R/runtime.R` (L132-L144) |
-| `trce-runtime-009` | `format_console_entry()` | utility_function | `R/runtime.R` (L498-L509) |
+| `trce-runtime-009` | `format_console_entry()` | utility_function | `R/runtime.R` (L501-L512) |
 | `trce-runtime-010` | `install_quit_guard()` | utility_function | `R/runtime.R` (L64-L80) | 
 
 Coverage is 100% of annotatable components in every source file, verified by
@@ -198,4 +217,34 @@ check that every ID present in source is indexed above.
 `samples/` ships five example scripts — one per detected archetype plus a deliberately
 "broken style" file that exercises all nine Pitfall Sentinel detectors — so a fresh install
 has something to open in the Studio immediately. See `samples/README.md`.
+
+---
+
+## 6. Live Session & Editor (Phase 1, recorded)
+
+The Studio could read, explain and document R code but never *run* it, which made it a report
+about R rather than a place to work in R. Phase 1 adds the missing half.
+
+| Piece | What it does | Trace IDs |
+|-------|--------------|-----------|
+| `R/runtime.R` | A dependency-free R session: evaluates submitted code, captures printed values, `cat()` output, messages, warnings, errors and plots, and reports the workspace | `trce-rparse-015`, `trce-runtime-001` … `-010` |
+| `rtrce run <file>` | The same engine on the command line: prints the transcript, the workspace and where any plots were written | `trce-cli-003` route, `R/runtime.R` |
+| `R/editor_ops.R` | The IDE-style decisions, kept testable: which statement a Ctrl+Enter should run, how long the document is, how Up/Down walk history | `trce-rparse-016`, `trce-editor-001` … `-003` |
+| `R/studio_editor.R`, `R/studio_console.R` | The two panes: a CodeMirror editor bound to the working document, and a console sharing the same session | `trce-rparse-017`/`-018`, `trce-ui-editor-001`/`-002`, `trce-ui-console-001`/`-002` |
+| `www/` | Vendored CodeMirror 5.65.16 (MIT) plus the Shiny bridge, so the Studio works offline with no new R package | — (not R source, so not covered by the trace index) |
+
+Behavioural decisions worth remembering, each of which came from running real files rather than
+from theory:
+
+| Decision | Why |
+|----------|-----|
+| `quit()`/`q()` are shadowed in a hidden parent frame | One bundled sample ends a branch with `quit()`; unguarded it terminates the whole Studio process, taking every other session with it (`trce-runtime-010`) |
+| Printing a `shiny.appobj` is refused with an explanation | `samples/01_shiny_app.R` ends with `shinyApp(ui, server)`, and printing that starts a server and blocks the host |
+| Output is flushed by closing the sink before it is read | A line written without a trailing newline stays in the connection buffer, so `cat("x")` was silently dropped |
+| Every evaluation runs under `setTimeLimit` | A runaway loop in the Studio would otherwise wedge the process (verified: 1 s budget interrupts in 1.05 s) |
+| Plots are captured only when the display list proves something was drawn | Otherwise an untouched PNG device is presented as a plot |
+| The Studio binds to `127.0.0.1` unless `HOST` / `RTRCE_ALLOW_REMOTE=1` is set | The page runs R code; remote access must be a deliberate, announced choice (`trce-studio-005`) |
+| Custom-message handlers in `www/rtrce-editor.js` are registered through one helper | Shiny throws unless a handler takes exactly one argument, and that throw silently disabled every handler registered after it — the run highlight and gutter hints never fired |
+| Assets are served with a `?v=<mtime>` token | A cached `rtrce-editor.js` after an upgrade is indistinguishable from a broken feature (`trce-studio-007`) |
+| `count_lines()` rather than `strsplit()` | R drops a trailing empty field, so the status line disagreed with the editor's gutter by one line (`trce-editor-003`) |
 

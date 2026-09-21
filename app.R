@@ -90,6 +90,97 @@ source(file.path(script_dir, "R", "annotator.R"))
 source(file.path(script_dir, "R", "validator.R"))
 source(file.path(script_dir, "R", "explain.R"))
 source(file.path(script_dir, "R", "pedagogy.R"))
+# Live session + editor panes: runtime.R owns the engine, editor_ops.R the
+# IDE-style decisions, and the studio_* files the two panes that use them.
+source(file.path(script_dir, "R", "runtime.R"))
+source(file.path(script_dir, "R", "editor_ops.R"))
+source(file.path(script_dir, "R", "studio_editor.R"))
+source(file.path(script_dir, "R", "studio_console.R"))
+
+# -----------------------------------------------------------------------------
+# Where the Studio listens
+# -----------------------------------------------------------------------------
+# The Studio executes the user's R code, so exposing it to a network is exposing
+# an R console to that network. It therefore binds to loopback by default;
+# remote access is opt-in and announced both on the console and in the UI.
+# /**
+#  * @trce-id trce-studio-005
+#  * @trce-who Operator / Studio Launcher
+#  * @trce-what Decides which interface the Studio binds to and whether to warn that code execution is reachable from the network
+#  * @trce-when Once at startup, before the Shiny server is created
+#  * @trce-where app.R -> studio_bind_host | Upstream: interactive_guard, start_studio.sh | Downstream: shiny::runApp
+#  * @trce-why A localhost default keeps an in-browser R console from becoming a network-accessible one by accident; containers and Chromebooks, which need a wider bind, opt in explicitly
+#  * @trce-how Reads HOST, then RTRCE_ALLOW_REMOTE, and falls back to 127.0.0.1; reports remote access so the UI can show a banner
+#  */
+studio_bind_host <- function() {
+  requested <- Sys.getenv("HOST", "")
+  if (nzchar(requested)) {
+    return(list(host = requested, remote = !requested %in% c("127.0.0.1", "localhost", "::1")))
+  }
+  if (identical(Sys.getenv("RTRCE_ALLOW_REMOTE"), "1")) {
+    return(list(host = "0.0.0.0", remote = TRUE))
+  }
+  list(host = "127.0.0.1", remote = FALSE)
+}
+
+BIND <- studio_bind_host()
+REMOTE_ACCESS <- isTRUE(BIND$remote)
+
+# -----------------------------------------------------------------------------
+# Static assets
+# -----------------------------------------------------------------------------
+# Shiny maps ./www automatically only when it is given the app *directory*. This
+# app is launched as a script (Rscript app.R) or sourced by the CLI, so the
+# mapping is registered explicitly rather than assumed -- without it every
+# vendored editor asset 404s and the panes silently fall back to plain textareas.
+# /**
+#  * @trce-id trce-studio-006
+#  * @trce-who Studio Launcher / Asset Loader
+#  * @trce-what Registers the vendored www/ directory as a Shiny resource path so the browser can load CodeMirror and the editor bridge
+#  * @trce-when Once at startup, before the UI is built
+#  * @trce-where app.R -> register_studio_assets | Upstream: top-level script load | Downstream: ui() asset URLs, www/rtrce-editor.js
+#  * @trce-why Without the mapping the editor assets 404 while the page still renders, so the Studio looks fine and silently has no editor
+#  * @trce-how Adds the "rtrce" resource prefix if it is not already registered, which also keeps the app safe to source twice in one session
+#  */
+register_studio_assets <- function() {
+  www <- file.path(script_dir, "www")
+  if (!dir.exists(www)) return(invisible(FALSE))
+  if (!"rtrce" %in% names(shiny::resourcePaths())) {
+    shiny::addResourcePath("rtrce", www)
+  }
+  invisible(TRUE)
+}
+
+register_studio_assets()
+
+# -----------------------------------------------------------------------------
+# Asset cache-busting
+# -----------------------------------------------------------------------------
+# A browser will happily keep serving last week's rtrce-editor.js after an
+# upgrade, which looks exactly like a broken feature. Stamping the asset URLs
+# with the files' newest modification time makes a stale cache impossible to
+# confuse with a bug.
+# /**
+#  * @trce-id trce-studio-007
+#  * @trce-who Studio Launcher / Asset Loader
+#  * @trce-what Produces a short version token from the modification times of the vendored browser assets
+#  * @trce-when Once at startup, when the UI and its asset URLs are built
+#  * @trce-where app.R -> studio_asset_version | Upstream: register_studio_assets | Downstream: ui() asset URLs
+#  * @trce-why Debugging a cached script that hides a fix wastes hours, and the symptom is indistinguishable from a real fault
+#  * @trce-how Returns the newest mtime of www/ as a compact integer, or "0" when the directory is absent
+#  */
+studio_asset_version <- function() {
+  www <- file.path(script_dir, "www")
+  if (!dir.exists(www)) return("0")
+  files <- list.files(www, recursive = TRUE, full.names = TRUE)
+  if (length(files) == 0) return("0")
+  times <- file.info(files)$mtime
+  times <- times[!is.na(times)]
+  if (length(times) == 0) return("0")
+  format(as.integer(max(as.numeric(times))), scientific = FALSE)
+}
+
+ASSET_VERSION <- studio_asset_version()
 
 # -----------------------------------------------------------------------------
 # Sample-file discovery
@@ -200,13 +291,29 @@ ui <- fluidPage(
       .btn-walkthrough { margin-right: 8px; font-weight: 600; padding: 8px 16px; }
       .field-label { font-size: 12px; font-weight: 700; color: #475569; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
       .table { font-size: 13px; }
-    "))
+    ")),
+    # Vendored CodeMirror (MIT, see www/codemirror/LICENSE) so the Studio works
+    # offline: no CDN, no network dependency, no third-party R package. The ?v=
+    # token busts the browser cache whenever the assets change.
+    tags$link(rel = "stylesheet", href = sprintf("rtrce/codemirror/lib/codemirror.css?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/codemirror/lib/codemirror.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/codemirror/mode/r/r.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/codemirror/addon/edit/matchbrackets.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/codemirror/addon/edit/closebrackets.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/codemirror/addon/comment/comment.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/rtrce-editor.js?v=%s", ASSET_VERSION))
   ),
 
   div(class = "header-bar",
     h1(STUDIO_NAME),
     p("Drop or select an R file to inspect its architecture, understand every component, and add TRCE annotations as you go."),
-    uiOutput("active_file_badge")
+    uiOutput("active_file_badge"),
+    if (REMOTE_ACCESS) {
+      div(style = "margin-top: 10px; background: #7f1d1d; color: #fee2e2; padding: 8px 12px; border-radius: 6px; font-size: 13px;",
+        strong("Remote access is enabled. "),
+        "This page can run R code, so anyone who can reach this address can run code on this machine. ",
+        "Unset HOST / RTRCE_ALLOW_REMOTE to listen on localhost only.")
+    }
   ),
 
   sidebarLayout(
@@ -260,6 +367,27 @@ ui <- fluidPage(
       uiOutput("encoding_note_banner"),
       tabsetPanel(
         id = "main_tabs",
+
+        # --- TAB 0: WORKSPACE (editor + console + environment) ---
+        # Placed first because this is the pane a user should live in: edit, run,
+        # see what happened. The analysis tabs keep their existing behaviour.
+        tabPanel("Workspace",
+          br(),
+          div(class = "card", style = "margin-bottom: 12px;",
+            h4(style = "margin-top: 0;", "Source & Console"),
+            p(style = "color: #64748b; font-size: 12px; margin-bottom: 12px;",
+              "This is where you edit and run R. Everything you change here flows into the analysis, walkthrough and student tabs automatically."),
+            studio_editor_ui(DEFAULT_CODE, "sample_pipeline.R"),
+            br(),
+            studio_console_ui(),
+            br(),
+            div(class = "card", style = "margin-bottom: 0;",
+              h4("Environment"),
+              p(style = "color: #64748b; font-size: 12px;", "Objects created by your code, refreshed after every run."),
+              tableOutput("session_workspace_table")
+            )
+          )
+        ),
 
         # --- TAB 1: GUIDED WALKTHROUGH ---
         tabPanel("Guided Walkthrough",
@@ -371,6 +499,93 @@ server <- function(input, output, session) {
   # Walkthrough navigation state
   step_index <- reactiveVal(1L)
   completed_walkthrough <- reactiveVal(FALSE)
+
+  # --- LIVE SESSION SHARED BY THE EDITOR AND THE CONSOLE ----------------------
+  # One session, one document. Ctrl+Enter in the editor and a command typed at
+  # the console therefore behave identically, and objects created in either are
+  # immediately visible to the other -- which is how a real R session works.
+  live_session <- reactiveVal(new_r_session())
+  console_log  <- reactiveVal(list())
+  # Bumped after every evaluation and restart. The session object is mutated in
+  # place, so re-setting live_session() to the same object does NOT invalidate its
+  # dependents -- this counter is what actually tells the environment table and
+  # the console status that something ran.
+  session_revision <- reactiveVal(0L)
+  MAX_LOG_ENTRIES <- 200L
+
+  # The single place code is executed. It returns the engine's result so callers
+  # can react to errors, and it refreshes everything that depends on the session.
+  run_code <- function(code, label = "console", from = NULL, to = NULL) {
+    live <- live_session()
+    result <- session_evaluate(live, code)
+
+    # Mutated in place, so the revision counter below is the signal that makes the
+    # environment table and console status re-render.
+    live_session(live)
+    session_revision(session_revision() + 1L)
+
+    new_entries <- list()
+    if (isTRUE(result$incomplete)) {
+      new_entries <- list(list(code = code, lines = character(0),
+                               kinds = character(0), incomplete = TRUE))
+    } else {
+      for (e in result$entries) {
+        # `lines` and `kinds` are parallel vectors in console order, so the
+        # transcript can colour an error red and a warning amber.
+        new_entries[[length(new_entries) + 1L]] <- list(
+          code  = e$code,
+          lines = format_console_entry(e),
+          kinds = c(rep("out", length(e$output)),
+                    rep("msg", length(e$messages)),
+                    rep("warn", length(e$warnings)),
+                    if (!is.null(e$error)) "err" else character(0)),
+          incomplete = FALSE
+        )
+      }
+    }
+
+    # Keep the transcript bounded: a loop printing in the Studio must not be able
+    # to grow the browser's DOM without limit.
+    log <- c(console_log(), new_entries)
+    if (length(log) > MAX_LOG_ENTRIES) {
+      log <- log[(length(log) - MAX_LOG_ENTRIES + 1L):length(log)]
+    }
+    console_log(log)
+
+    if (!is.null(from)) {
+      session$sendCustomMessage("rtrce:highlightLines", list(from = from, to = to))
+    }
+
+    result
+  }
+
+  # The contract the editor and console panes are written against.
+  studio_state <- list(
+    code      = working_code,        # the document: single source of truth
+    filename  = active_filename,
+    path      = active_file_path,
+    converted = reactive({ !is.null(encoding_note()) }),
+    live      = live_session,
+    log       = console_log,
+    revision  = session_revision,
+    run       = run_code,
+    restart   = function() {
+      live <- live_session()
+      session_reset(live)
+      live_session(live)             # keep the handle current
+      session_revision(session_revision() + 1L)
+      invisible(live)
+    }
+  )
+
+  output$session_workspace_table <- renderTable({
+    session_revision()               # re-render whenever the session runs
+    ws <- session_workspace(live_session())
+    if (nrow(ws) == 0) {
+      return(data.frame(Status = "No objects yet — run a line or type at the console."))
+    }
+    ws
+  })
 
   # Load an R file into the editor. Read failures are recorded in load_error()
   # rather than swallowed, so the user is told what went wrong.
@@ -1044,6 +1259,13 @@ server <- function(input, output, session) {
       })
     )
   })
+
+  # --- EDITOR & CONSOLE PANES -------------------------------------------------
+  # Registered last so the state they are given is fully defined above. Both
+  # panes render only into the Workspace tab, but their observers must exist for
+  # the whole session: a Ctrl+Enter can arrive while another tab is selected.
+  studio_editor_server(input, output, session, studio_state)
+  studio_console_server(input, output, session, studio_state)
 }
 
 # --- STANDALONE APP LAUNCHER ---
@@ -1060,8 +1282,9 @@ app <- shinyApp(ui = ui, server = server)
 #  */
 if (!interactive()) {
   port <- as.integer(Sys.getenv("PORT", "8083"))
-  # Bind on 0.0.0.0 by default on Linux/Baguette/Crostini so container port forwarding and host access works seamlessly
-  host <- Sys.getenv("HOST", "0.0.0.0")
+  # Localhost by default: this page runs R code, so binding it to a network is a
+  # deliberate choice (HOST=... or RTRCE_ALLOW_REMOTE=1), announced below.
+  host <- BIND$host
 
   # Detect network interfaces to display all accessible URLs
   ip_candidates <- c("127.0.0.1", "localhost")
@@ -1087,8 +1310,23 @@ if (!interactive()) {
   if (dir.exists("/dev/vsock") || file.exists("/run/systemd/container") || dir.exists("/mnt/chromeos")) {
     message("\n  [Chromebook / ChromeOS / Baguette Note]:")
     message(sprintf("   * From ChromeOS browser, try:   http://penguin.linux.test:%d", port))
-    message(sprintf("   * Or use container IP:          http://%s:%d", 
-                    if (length(ip_candidates) > 2) ip_candidates[3] else "127.0.0.1", port))
+    if (!REMOTE_ACCESS) {
+      message("   * If that cannot reach the Studio, it is bound to localhost only.")
+      message(sprintf("     Re-run with:   RTRCE_ALLOW_REMOTE=1 %s", "rtrce-studio"))
+    } else {
+      message(sprintf("   * Or use container IP:          http://%s:%d",
+                      if (length(ip_candidates) > 2) ip_candidates[3] else "127.0.0.1", port))
+    }
+  }
+
+  if (REMOTE_ACCESS) {
+    message("  [WARNING] Remote access is enabled: this Studio RUNS R CODE, so anyone")
+    message("            who can reach this address can run code on this machine.")
+    message("            Prefer HOST=127.0.0.1 for day-to-day use; enable remote")
+    message("            access only on a network you trust.")
+  } else {
+    message("  Executing code is enabled, so the Studio listens on localhost only.")
+    message("  Set RTRCE_ALLOW_REMOTE=1 (or HOST=0.0.0.0) to reach it from another host.")
   }
   message("==================================================================\n")
 

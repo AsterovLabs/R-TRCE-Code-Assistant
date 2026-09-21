@@ -36,6 +36,7 @@ source(file.path(root_dir, "R", "validator.R"))
 source(file.path(root_dir, "R", "explain.R"))
 source(file.path(root_dir, "R", "pedagogy.R"))
 source(file.path(root_dir, "R", "runtime.R"))
+source(file.path(root_dir, "R", "editor_ops.R"))
 
 # Test harness helpers
 pass_count <- 0
@@ -393,6 +394,64 @@ assert("Prose mentioning @trce-id does not shadow the real annotation ID",
        "trce-prose-001" %in% ids_pr)
 unlink(prose_tmp)
 
+# --- Test 8b: Editor operations (R/editor_ops.R) ---
+# Kept next to the regression tests because these are the same kind of
+# "previously easy to get wrong" logic: cursor positions, trailing newlines.
+cat("\n--- 8b. Testing Editor Operations (R/editor_ops.R) ---\n")
+
+edit_doc <- c(
+  "# leading comment",
+  "",
+  "f <- function(x) {",
+  "  y <- x + 1",
+  "  y * 2",
+  "}",
+  "",
+  "g <- 1"
+)
+
+stmt_mid <- statement_code_at(edit_doc, 4)
+assert("statement_code_at() returns the whole statement for a line inside it",
+       stmt_mid$from == 3 && stmt_mid$to == 6 && stmt_mid$found)
+assert("statement_code_at() returns real source, not a deparsed form",
+       grepl("y <- x \\+ 1", stmt_mid$code))
+assert("statement_code_at() walks down from a leading comment",
+       statement_code_at(edit_doc, 1)$from == 3)
+assert("statement_code_at() walks up from a trailing blank line",
+       statement_code_at(edit_doc, 7)$from == 3)
+assert("statement_code_at() handles the last line",
+       statement_code_at(edit_doc, 8)$from == 8)
+assert("statement_code_at() clamps a cursor past the end of the document",
+       statement_code_at(edit_doc, 999)$from == 8)
+assert("statement_code_at() survives a document that does not parse",
+       !statement_code_at(c("x <- )", "y <- 2"), 1)$found)
+assert("statement_code_at() copes with an empty document",
+       identical(statement_code_at(character(0), 1)$code, ""))
+
+assert("count_lines() counts lines the way an editor does",
+       count_lines("a\nb\n") == 3 && count_lines("a") == 1 &&
+       count_lines("") == 0)
+
+hist <- c("first", "second", "third")
+h1 <- history_step(hist, 0L, "older")
+assert("history_step() starts at the most recent entry",
+       h1$index == 1 && h1$value == "third")
+h2 <- history_step(hist, h1$index, "older")
+assert("history_step() walks backwards through history",
+       h2$index == 2 && h2$value == "second")
+h3 <- history_step(hist, h2$index, "newer")
+assert("history_step() walks forwards again",
+       h3$index == 1 && h3$value == "third")
+back <- history_step(hist, 1L, "newer")
+assert("history_step() returns to a blank line past the newest entry",
+       back$index == 0 && back$value == "")
+assert("history_step() clamps at the oldest entry",
+       history_step(hist, 3L, "older")$index == 3)
+assert("history_step() copes with an empty history",
+       history_step(character(0), 0L, "older")$value == "")
+assert("history_step() copes with a missing index",
+       history_step(hist, NA_integer_, "older")$index == 1)
+
 # ------------------------------------------------------------------------------
 # Test 9: Bundled example scripts (samples/)
 # ------------------------------------------------------------------------------
@@ -555,6 +614,7 @@ cat("\n--- 11. Testing Repository Self-Coverage, Trace Index & Dependency Manife
 self_files <- c(
   "r_trce.R", "app.R", "R/common.R", "R/parser.R", "R/analyzer.R",
   "R/annotator.R", "R/validator.R", "R/explain.R", "R/pedagogy.R", "R/runtime.R",
+  "R/editor_ops.R", "R/studio_editor.R", "R/studio_console.R",
   "tests/test_r_trce.R"
 )
 

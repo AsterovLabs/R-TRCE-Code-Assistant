@@ -10,6 +10,10 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 |-----------|----------|---------|
 | CLI Entrypoint | `r_trce.R` | Subcommand router (`parse`, `explain`, `tutor`, `pitfalls`, `quiz`, `annotate`, `check`, `export-traces`, `studio`, `doctor`) |
 | Interactive Studio | `app.R` | Shiny webapp for visual AST inspection, dependency graphs, and live annotation |
+| Editor Pane | `R/studio_editor.R` | CodeMirror source editor bound to the working document, with Run / Run All / Save and cursor reporting |
+| Console Pane | `R/studio_console.R` | Interactive R console sharing the editor's session: transcript, history, restart |
+| Editor Operations | `R/editor_ops.R` | The IDE-style decisions kept shiny-free and testable: statement at a cursor, editor line counting, history stepping |
+| Browser Assets | `www/` | Vendored CodeMirror 5.65.16 (MIT) + `rtrce-editor.js`, the Shiny bridge. No CDN, no extra R package |
 | **Shared Helpers** | **`R/common.R`** | **Sourced first by every entry point. Owns `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest (`required_packages()`, `optional_packages()`, `missing_packages()`) and encoding-tolerant file reading. Never duplicate any of these elsewhere.** |
 | Core AST Parser | `R/parser.R` | AST extraction, token mapping, and comment association using base R `parse()` & `getParseData()` |
 | Semantic Analyzer | `R/analyzer.R` | Archetype detection (Shiny UI/server, snowflake schemas, ANOVA models, CLI runners), call graph |
@@ -37,6 +41,9 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 9. **Never report a pattern found inside a comment.** The Pitfall Sentinel and the ID extractors skip comment lines; keep it that way so teaching notes are never flagged as defects.
 10. **One dependency manifest.** `required_packages()`, `optional_packages()` and `missing_packages()` in `R/common.R` are the only definitions. `rtrce doctor`, `install.sh` and `install.ps1` read them instead of carrying private lists, and `tests/test_r_trce.R` fails if either installer hard-codes a package list again. Add a package by editing that manifest, never by editing an installer.
 11. **The session engine is Shiny-free.** `R/runtime.R` must never `library(shiny)` or reach into reactive state. The Studio console and `rtrce run` both call `session_evaluate()`, so a behaviour change in one is a behaviour change in the other — and the test suite can verify it without a browser.
+12. **A hosted session may never kill or block its host.** `R/runtime.R` guards `quit()`/`q()` and refuses to print a `shiny.appobj`. Anything else that could terminate or indefinitely block the Studio process (starting a server, waiting on input) belongs behind the same kind of guard, with an explanation the user can read.
+13. **The Studio binds to localhost by default.** It executes arbitrary R code, so remote access must be explicit (`HOST=...` or `RTRCE_ALLOW_REMOTE=1`) and is announced in the terminal and in a UI banner. Never reinstate a default of `0.0.0.0`.
+14. **Shiny custom-message handlers take exactly one argument.** Shiny throws otherwise, *during registration*, which silently disables every handler registered after it. Register through the `registerHandler()` helper in `www/rtrce-editor.js`, never `Shiny.addCustomMessageHandler()` directly.
 
 
 ---

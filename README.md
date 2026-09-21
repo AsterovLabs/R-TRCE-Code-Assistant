@@ -54,6 +54,11 @@ Not sure what "archetype" or "coverage %" mean? See the [Glossary](#glossary).
   - **Statistical Formula Deconstructor:** Translates model formulas (`y ~ x1 + x2 * x3`) into clear statistical explanations of response variables, predictors, and interaction terms.
   - **Comprehension Quiz Generator:** Generates automated self-study multiple-choice questions directly from user code.
 * **Non-Destructive Code Injection:** Automatically injects annotations into R source files while preserving existing formatting, author comments, and indentation.
+* **Live Session & Editor:** The Studio (and `rtrce run`) can actually execute R: an editable
+  CodeMirror pane with `Ctrl+Enter` statement execution, a console sharing the same session,
+  captured plots, and an environment table — all with **no extra R package**. The editor ships
+  vendored ([CodeMirror](https://codemirror.net) 5.65.16, MIT, see `www/codemirror/LICENSE`) so
+  it works offline.
 * **Integrity Audit & Coverage:** Audits existing or generated annotations, verifies field completeness, flags duplicate IDs, and reports coverage percentages.
 * **Dual Interfaces:** Provides both a Unix-philosophy command-line tool (`r_trce.R`) and an interactive Shiny web dashboard (`app.R` with dedicated 🎓 Student Studio).
 
@@ -119,6 +124,7 @@ from a checkout, use `Rscript r_trce.R` instead — both take identical argument
 | Command | What it does |
 | :--- | :--- |
 | `rtrce parse <file>` | Lists the components found in the file |
+| `rtrce run <file> [--timeout S] [--wd DIR]` | Runs the file in a live session and prints the transcript, workspace and plot locations |
 | `rtrce explain <file> [--md]` | Full architecture write-up plus the call graph |
 | `rtrce doctor` | Checks the R version and every package in the dependency manifest |
 
@@ -187,17 +193,44 @@ Rscript app.R
 ```
 
 Open `http://127.0.0.1:8083` in your browser:
-* **Tab 1: Guided Walkthrough ("Walk Me Through It"):**
+* **Tab 1: Workspace — edit and run R (new):**
+  - A real code editor: R syntax highlighting, line numbers, bracket matching, auto-indent.
+  - `Ctrl+Enter` runs the line or selection; `Ctrl+Shift+Enter` runs the whole file; `Ctrl+S`
+    saves back to the file you opened; `Ctrl+/` comments a line.
+  - Running a line inside a function runs the **whole statement**, the way RStudio does, and
+    the editor shows exactly which lines ran.
+  - A console sharing the same session: values, `cat()` output, messages, warnings and errors
+    appear the way a terminal shows them, `Up`/`Down` recall history, and plots are captured.
+  - An **Environment** table lists every object with its type, class, size and a preview, so
+    you can watch the workspace change as you work.
+  - Nothing here is a separate sandbox: whatever you type becomes the document that every other
+    tab analyses, annotates and quizzes you on.
+* **Tab 2: Guided Walkthrough ("Walk Me Through It"):**
   - Drop or select an R script to start a step-by-step interactive inspection.
   - Review each function, reactive node, and pipeline step one by one.
   - View syntax-highlighted code snippets, architectural dependencies, and caller/callee graphs.
   - Inspect, customize, or accept the generated 6-point TRCE annotations (`@trce-*`) as you go.
   - Actions: `[ Accept & Next ]`, `[ Skip ]`, `[ Previous ]`, `[ Annotate All Immediately ]`.
   - Progress tracker and celebration screen upon 100% completion.
-* **Tab 2: Annotated Code & Traces:** Real-time view of your annotated code, TRCE audit validation badge, and download buttons (`.R` and `.json`).
-* **Tab 3: Architectural Explanation:** View detected archetype, system narratives, and caller-callee dependency matrices.
-* **Tab 4: AST & Parse Tokens:** Raw R AST expression coordinates and lexical token streams.
-* **Tab 5: 🎓 Student Studio:** Pitfall sentinel, concept decoder, pipeline/formula deconstruction, and a self-study quiz.
+* **Tab 3: Annotated Code & Traces:** The annotated working copy, TRCE audit validation badge, and download buttons (`.R` and `.json`).
+* **Tab 4: Architectural Explanation:** View detected archetype, system narratives, and caller-callee dependency matrices.
+* **Tab 5: AST & Parse Tokens:** Raw R AST expression coordinates and lexical token streams.
+* **Tab 6: 🎓 Student Studio:** Pitfall sentinel, concept decoder, pipeline/formula deconstruction, and a self-study quiz.
+
+### Running code in the browser: what to know
+
+The Studio executes R, which is the point — and also why it listens on **localhost only** by
+default. To reach it from another machine (a Chromebook's browser, a container host) opt in:
+
+```bash
+RTRCE_ALLOW_REMOTE=1 ./start_studio.sh      # prints a warning, shows a red banner in the UI
+HOST=127.0.0.1 ./start_studio.sh            # force loopback explicitly
+```
+
+Runaway code is stopped by a per-evaluation time limit (10 s by default), `quit()` is blocked so
+a script cannot end the session, and a file that starts a Shiny server by printing it reports
+that instead of hanging the Studio.
+
 
 No R file handy? The sidebar's **"Or load an example script"** dropdown lists the scripts in
 [`samples/`](samples/README.md) — one per archetype plus a deliberately broken file that

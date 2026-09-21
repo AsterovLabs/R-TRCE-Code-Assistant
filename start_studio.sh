@@ -38,7 +38,17 @@ fi
 echo "Using R: $R_BIN"
 
 export PORT="${PORT:-8083}"
-export HOST="${HOST:-0.0.0.0}"
+# The Studio runs the user's R code, so app.R binds it to localhost unless asked
+# otherwise. Remote access is opt-in here rather than the default: it is announced
+# below and again in a red banner inside the Studio itself.
+if [ -n "${HOST:-}" ]; then
+  export HOST
+elif [ "${RTRCE_ALLOW_REMOTE:-0}" = "1" ]; then
+  export HOST="0.0.0.0"
+  echo "[!] RTRCE_ALLOW_REMOTE=1 -- the Studio will be reachable from other machines."
+  echo "    Anyone who can reach it can run R code on this machine. Use only on a"
+  echo "    network you trust."
+fi
 
 # Auto-detect IP addresses
 HOST_IPS=""
@@ -49,7 +59,7 @@ fi
 echo "=================================================================="
 echo "  Starting R-TRCE Code Assistant Studio & Guided Walkthrough"
 echo "=================================================================="
-echo "  Listening on: http://${HOST}:${PORT}"
+echo "  Listening on: http://${HOST:-127.0.0.1}:${PORT}"
 echo ""
 echo "  Access the Studio in your browser via:"
 echo "   -> http://localhost:${PORT}"
