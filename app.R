@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # =============================================================================
-# app.R -- Interactive Shiny Studio & Guided Walkthrough for R-TRCE
+# app.R -- R-TRCE Code Assistant: Interactive Shiny Studio
 # =============================================================================
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
@@ -17,6 +17,11 @@
 #        or: Rscript -e 'shiny::runApp("app.R", port = 8083)'
 # =============================================================================
 
+# Single source of truth for the product name. Renaming the tool is a one-line
+# change here instead of a hunt through titles, banners and page headers.
+APP_NAME    <- "R-TRCE Code Assistant"
+STUDIO_NAME <- paste(APP_NAME, "Studio")
+
 # /**
 #  * @trce-id trce-rparse-010
 #  * @trce-who Shiny Web Browser Client / Developer
@@ -30,7 +35,7 @@
 # Verify and load Shiny
 if (!requireNamespace("shiny", quietly = TRUE)) {
   message("\n==================================================================")
-  message("  R-TRCE Studio requires the 'shiny' package.")
+  message(sprintf("  %s requires the 'shiny' package.", STUDIO_NAME))
   message("  Attempting to install 'shiny' automatically into user library...")
   message("==================================================================\n")
 
@@ -57,7 +62,7 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
     cat("    install.packages('shiny', repos='https://cloud.r-project.org')\n\n", file = stderr())
     cat("  Option 2 (Debian / Ubuntu / Chromebook Crostini terminal):\n", file = stderr())
     cat("    sudo apt update && sudo apt install -y r-cran-shiny\n\n", file = stderr())
-    stop("Package 'shiny' is required to launch R-TRCE Studio.", call. = FALSE)
+    stop(sprintf("Package 'shiny' is required to launch %s.", STUDIO_NAME), call. = FALSE)
   }
   message("\n[OK] 'shiny' installed successfully!\n")
 }
@@ -66,18 +71,19 @@ suppressPackageStartupMessages({
   library(shiny)
 })
 
-# Locate script directory cleanly
+# Locate this script's directory, then load shared helpers + modules.
+# The canonical directory resolution lives in get_script_dir() (R/common.R);
+# this short bootstrap only exists to find that file.
+.cmd_file <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 script_dir <- tryCatch({
-  args <- commandArgs(trailingOnly = FALSE)
-  file_arg <- grep("^--file=", args, value = TRUE)
-  if (length(file_arg) > 0) {
-    clean_path <- gsub("~+~", " ", sub("^--file=", "", file_arg[1]), fixed = TRUE)
-    normalizePath(dirname(clean_path))
+  if (length(.cmd_file) > 0) {
+    normalizePath(dirname(gsub("~+~", " ", sub("^--file=", "", .cmd_file[1]), fixed = TRUE)))
   } else {
     getwd()
   }
 }, error = function(e) getwd())
 
+source(file.path(script_dir, "R", "common.R"))
 source(file.path(script_dir, "R", "parser.R"))
 source(file.path(script_dir, "R", "analyzer.R"))
 source(file.path(script_dir, "R", "annotator.R"))
@@ -85,16 +91,55 @@ source(file.path(script_dir, "R", "validator.R"))
 source(file.path(script_dir, "R", "explain.R"))
 source(file.path(script_dir, "R", "pedagogy.R"))
 
-# Find available sample files from R Test if accessible
-r_test_dir <- file.path(dirname(script_dir), "R Test")
-sample_files <- list()
-if (dir.exists(r_test_dir)) {
-  all_r_files <- list.files(r_test_dir, pattern = "\\.R$", recursive = TRUE, full.names = TRUE)
-  for (f in all_r_files) {
-    rel <- sub(paste0("^", normalizePath(r_test_dir), "/?"), "", normalizePath(f))
-    sample_files[[rel]] <- f
+# -----------------------------------------------------------------------------
+# Sample-file discovery
+# -----------------------------------------------------------------------------
+# Example scripts are offered from any of these locations, in priority order:
+#   1. a sibling "R Test" checkout              (the teaching corpus)
+#   2. ./samples inside this project
+#   3. ~/.r-trce-code-assistant/samples         (via install.sh / install.ps1)
+#   4. ~/.r-trce/samples                        (older installs)
+# Every root is optional. When none exist the picker is hidden by the
+# `if (length(sample_files) > 0)` guard in the UI below and the built-in
+# default sample is used instead.
+# /**
+#  * @trce-id trce-studio-001
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes discover_sample_files(roots) to handle utility_function operations
+#  * @trce-where app.R -> discover_sample_files | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (roots); operates self-contained
+#  */
+discover_sample_files <- function(roots) {
+  found <- list()
+  for (root in roots) {
+    if (!nzchar(root) || !dir.exists(root)) next
+
+    root_norm <- normalizePath(root)
+    prefix_len <- nchar(root_norm) + 1L   # +1 for the path separator
+
+    for (f in list.files(root, pattern = "\\.R$", recursive = TRUE, full.names = TRUE)) {
+      f_norm <- normalizePath(f)
+
+      # Literal prefix strip (no regex): root paths can contain dots, plus signs
+      # and spaces, which would otherwise need escaping.
+      if (!startsWith(f_norm, paste0(root_norm, .Platform$file.sep))) next
+      rel <- substring(f_norm, prefix_len + 1L)
+      rel <- gsub("\\\\", "/", rel)
+
+      if (is.null(found[[rel]])) found[[rel]] <- f   # first root wins
+    }
   }
+  found
 }
+
+sample_files <- discover_sample_files(c(
+  file.path(dirname(script_dir), "R Test"),
+  file.path(script_dir, "samples"),
+  file.path(Sys.getenv("HOME"), ".r-trce-code-assistant", "samples"),
+  file.path(Sys.getenv("HOME"), ".r-trce", "samples")
+))
 
 # Default sample code
 DEFAULT_CODE <- "# =============================================================================
@@ -123,8 +168,17 @@ summarize_variance <- function(df, group_col, val_col) {
 "
 
 # --- UI DEFINITION ---
+# /**
+#  * @trce-id trce-studio-002
+#  * @trce-who Frontend User Interface / Web Browser Client
+#  * @trce-what Declares responsive Shiny user interface layout (fluidPage) with interactive control widgets and output displays
+#  * @trce-where app.R -> ui | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
+#  * @trce-when At application startup and client browser DOM initialization
+#  * @trce-why Provides an intuitive, reactive user interface for exploratory data analysis
+#  * @trce-how Assembles HTML layouts, navigation panels, interactive input widgets, and output placeholders
+#  */
 ui <- fluidPage(
-  title = "R-TRCE Studio & Walkthrough",
+  title = STUDIO_NAME,
   theme = NULL,
 
   tags$head(
@@ -150,8 +204,9 @@ ui <- fluidPage(
   ),
 
   div(class = "header-bar",
-    h1("R-TRCE Studio & Guided Walkthrough"),
-    p("Drop or select an R file to inspect its architecture, understand every component, and add TRCE annotations as you go.")
+    h1(STUDIO_NAME),
+    p("Drop or select an R file to inspect its architecture, understand every component, and add TRCE annotations as you go."),
+    uiOutput("active_file_badge")
   ),
 
   sidebarLayout(
@@ -161,7 +216,7 @@ ui <- fluidPage(
         h4("Source R File"),
         fileInput("file_upload", "Drop or Upload .R File:", accept = c(".R", ".r"), buttonLabel = "Browse...", placeholder = "No file chosen"),
         if (length(sample_files) > 0) {
-          selectInput("sample_select", "Or Load from R Test:",
+          selectInput("sample_select", "Or load an example script:",
                       choices = c("--- Choose sample ---" = "", sample_files),
                       selected = "")
         },
@@ -175,11 +230,34 @@ ui <- fluidPage(
         h4("Batch Actions"),
         actionButton("btn_batch_annotate", "Annotate All Immediately", class = "btn-primary btn-block", style = "width: 100%; font-weight: 600;"),
         p(style = "color: #64748b; font-size: 11px; margin-top: 6px;", "Or use the 'Interactive Walkthrough' tab to step through and approve each component.")
+      ),
+
+      # Always-visible primer so a first-time user knows what an annotation is.
+      div(class = "card",
+        h4("New to TRCE?"),
+        p(style = "color: #475569; font-size: 12px;",
+          "TRCE describes a piece of code by answering six questions. This tool writes those answers into your file as a comment block."),
+        tags$ul(style = "font-size: 12px; color: #475569; padding-left: 18px; line-height: 1.6; margin-bottom: 8px;",
+          tags$li(strong("WHO "), "runs it? (user, Shiny server, cron job)"),
+          tags$li(strong("WHAT "), "does it mechanically do? (join, filter, model)"),
+          tags$li(strong("WHERE "), "does it sit? (which file, who calls it, what it calls)"),
+          tags$li(strong("WHEN "), "does it fire? (at load, on click, once per row)"),
+          tags$li(strong("WHY "), "does it exist? (the problem it solves)"),
+          tags$li(strong("HOW "), "is it built? (parameters, state changes)")
+        ),
+        p(style = "color: #64748b; font-size: 11px; margin-bottom: 6px;",
+          strong("Coverage %"), " = share of annotatable components (functions, Shiny blocks, schemas, CLI runners) that already carry a block."),
+        p(style = "color: #64748b; font-size: 11px; margin: 0;",
+          strong("Archetypes"), " you may see: data_pipeline, statistical_model, visualization, shiny_server, cli_dispatcher, utility_function.")
       )
     ),
 
     mainPanel(
       width = 9,
+      # Persistent banners: read/parse failures are explained on every tab instead
+      # of leaving the user staring at empty panels.
+      uiOutput("load_error_banner"),
+      uiOutput("encoding_note_banner"),
       tabsetPanel(
         id = "main_tabs",
 
@@ -265,41 +343,74 @@ ui <- fluidPage(
 )
 
 # --- SERVER LOGIC ---
+# /**
+#  * @trce-id trce-studio-003
+#  * @trce-who Shiny Server Engine / Reactive Graph Supervisor
+#  * @trce-what Executes server(input, output, session) to handle shiny_server operations
+#  * @trce-where app.R -> server | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
+#  * @trce-when Upon new client WebSocket connection establishment per session
+#  * @trce-why Coordinates real-time reactive feedback loops between user inputs and visual outputs
+#  * @trce-how Accepts parameters (input, output, session); mutates parent environment state via '<<-'; operates self-contained
+#  */
 server <- function(input, output, session) {
 
-  # Source code state
-  initial_code <- reactiveVal(DEFAULT_CODE)
-  working_code <- reactiveVal(DEFAULT_CODE)
-  active_filename <- reactiveVal("sample_pipeline.R")
+  # --- Reactive state ---------------------------------------------------------
+  # initial_code     : the file exactly as loaded (used by "Reset")
+  # working_code     : the file plus everything this session has annotated
+  # active_filename  : friendly name shown in the UI
+  # active_file_path : real path on disk when known ("" for the built-in sample)
+  # load_error       : NULL when the current code parses; otherwise a message
+  # encoding_note    : set when a legacy-encoded file had to be re-interpreted
+  initial_code     <- reactiveVal(DEFAULT_CODE)
+  working_code     <- reactiveVal(DEFAULT_CODE)
+  active_filename  <- reactiveVal("sample_pipeline.R")
+  active_file_path <- reactiveVal("")
+  load_error       <- reactiveVal(NULL)
+  encoding_note    <- reactiveVal(NULL)
 
   # Walkthrough navigation state
   step_index <- reactiveVal(1L)
   completed_walkthrough <- reactiveVal(FALSE)
 
+  # Load an R file into the editor. Read failures are recorded in load_error()
+  # rather than swallowed, so the user is told what went wrong.
+  load_source_file <- function(path, display_name) {
+    loaded <- tryCatch(read_source_lines(path), error = function(e) {
+      load_error(sprintf("Could not read '%s': %s", display_name, conditionMessage(e)))
+      NULL
+    })
+    if (is.null(loaded)) return(invisible(FALSE))
+
+    txt <- paste(loaded$lines, collapse = "\n")
+    initial_code(txt)
+    working_code(txt)
+    active_filename(display_name)
+    active_file_path(path)
+    step_index(1L)
+    completed_walkthrough(FALSE)
+    load_error(NULL)
+    encoding_note(if (loaded$converted) {
+      sprintf("'%s' is not UTF-8 encoded, so it was read as Latin-1/cp1252. Accented characters may show as '?'.", display_name)
+    } else {
+      NULL
+    })
+    invisible(TRUE)
+  }
+
   # Observer for sample selection
   observeEvent(input$sample_select, {
     req(input$sample_select)
-    if (file.exists(input$sample_select)) {
-      lines <- readLines(input$sample_select, warn = FALSE)
-      txt <- paste(lines, collapse = "\n")
-      initial_code(txt)
-      working_code(txt)
-      active_filename(basename(input$sample_select))
-      step_index(1L)
-      completed_walkthrough(FALSE)
+    if (!file.exists(input$sample_select)) {
+      showNotification("That sample file is no longer on disk.", type = "error")
+      return()
     }
+    load_source_file(input$sample_select, basename(input$sample_select))
   })
 
   # Observer for file upload
   observeEvent(input$file_upload, {
     req(input$file_upload)
-    lines <- readLines(input$file_upload$datapath, warn = FALSE)
-    txt <- paste(lines, collapse = "\n")
-    initial_code(txt)
-    working_code(txt)
-    active_filename(input$file_upload$name)
-    step_index(1L)
-    completed_walkthrough(FALSE)
+    load_source_file(input$file_upload$datapath, input$file_upload$name)
   })
 
   # Reset to default sample
@@ -307,23 +418,33 @@ server <- function(input, output, session) {
     initial_code(DEFAULT_CODE)
     working_code(DEFAULT_CODE)
     active_filename("sample_pipeline.R")
+    active_file_path("")
     step_index(1L)
     completed_walkthrough(FALSE)
+    load_error(NULL)
+    encoding_note(NULL)
   })
 
-  # Parsed object of working code
+  # Parsed object of working code.
+  # On failure the reason is stored in load_error() and NULL is returned, so the
+  # UI can explain the problem instead of silently rendering empty tabs.
   parsed_data <- reactive({
     code <- working_code()
     tmp <- tempfile(fileext = ".R")
-    writeLines(code, tmp)
-    on.exit(unlink(tmp))
+    writeLines(enc2utf8(code), tmp)
+    on.exit(unlink(tmp), add = TRUE)
 
     tryCatch({
       p <- parse_r_file(tmp)
       p$file_name <- active_filename()
-      p$file_path <- active_filename()
+      # Do not clobber the real path: validation and JSON export report it.
+      p$file_path <- if (nzchar(active_file_path())) active_file_path() else tmp
+      load_error(NULL)
       p
     }, error = function(e) {
+      # Hide the internal temp file name in favour of the user's file name.
+      msg <- gsub(tmp, active_filename(), conditionMessage(e), fixed = TRUE)
+      load_error(msg)
       NULL
     })
   })
@@ -331,7 +452,7 @@ server <- function(input, output, session) {
   # Semantic analysis of working code
   analysis_data <- reactive({
     p <- parsed_data()
-    req(p)
+    if (is.null(p)) return(NULL)   # load_error() already explains why
     analyze_r_file(p)
   })
 
@@ -339,38 +460,36 @@ server <- function(input, output, session) {
   validation_data <- reactive({
     p <- parsed_data()
     a <- analysis_data()
-    req(p, a)
+    if (is.null(p) || is.null(a)) return(NULL)
     validate_r_annotations(p$file_path, p, a)
   })
 
-  # Extract list of annotatable components
+  # Annotatable components (single shared rule from R/common.R)
   annotatable_targets <- reactive({
     a <- analysis_data()
-    req(a)
-    targets <- list()
-    for (comp in a$components) {
-      if (comp$kind %in% c("function", "shiny_ui", "shiny_server", "schema_definition") || isTRUE(comp$is_cli_runner)) {
-        targets[[length(targets) + 1L]] <- comp
-      }
-    }
-    targets
+    if (is.null(a)) return(list())
+    select_annotatable_components(a$components)
   })
 
   # --- BATCH ANNOTATE BUTTON ---
   observeEvent(input$btn_batch_annotate, {
     p <- parsed_data()
     a <- analysis_data()
-    req(p, a)
+    if (is.null(p) || is.null(a)) {
+      showNotification("Cannot annotate: this file does not parse. See the message at the top of the page.",
+                       type = "error", duration = 8)
+      return()
+    }
 
     inj <- inject_annotations(
       p, a,
-      prefix = input$trce_prefix %||% "trce-r",
-      style = input$trce_style,
+      prefix = or_default(input$trce_prefix, "trce-r"),
+      style = or_default(input$trce_style, "jsdoc"),
       add_file_header = isTRUE(input$inc_header)
     )
     working_code(inj$annotated_code)
     completed_walkthrough(TRUE)
-    showNotification(sprintf("Batch annotation complete! Added %d TRCE blocks.", inj$blocks_added), type = "message")
+    showNotification(sprintf("Batch annotation complete: added %d TRCE block(s).", inj$blocks_added), type = "message")
     updateTabsetPanel(session, "main_tabs", selected = "Annotated Code & Traces")
   })
 
@@ -383,18 +502,39 @@ server <- function(input, output, session) {
     if (curr > length(targets)) return()
 
     comp <- targets[[curr]]
-    lines <- strsplit(working_code(), "\n")[[1]]
+
+    # Guard: "Previous" followed by "Accept" again must not insert a second block
+    # for the same component -- that produced duplicate @trce-id clashes.
+    if (!is.null(comp$existing_trce)) {
+      showNotification(
+        sprintf("'%s' already has a @trce-* block, so it was skipped to avoid a duplicate trace ID.", comp$name),
+        type = "warning", duration = 6
+      )
+      if (curr >= length(targets)) {
+        completed_walkthrough(TRUE)
+      } else {
+        step_index(curr + 1L)
+      }
+      return()
+    }
+
+    lines  <- strsplit(working_code(), "\n")[[1]]
+    prefix <- or_default(input$trce_prefix, "trce-r")
+
+    # Default ID continues above the highest ID already in the file, so it stays
+    # unique when the walkthrough is restarted or only partly completed.
+    next_id <- sprintf("%s-%03d", prefix, max_existing_trace_number(lines, prefix) + 1L)
 
     # Formulate annotation block from current editable fields
     block <- format_trce_block(
-      id = input$step_id %||% sprintf("%s-%03d", input$trce_prefix, curr),
-      who = input$step_who %||% "System Component",
-      what = input$step_what %||% "Component implementation",
-      where = input$step_where %||% active_filename(),
-      when = input$step_when %||% "On invocation",
-      why = input$step_why %||% "Architectural documentation",
-      how = input$step_how %||% "Implementation handles logic",
-      style = input$trce_style %||% "jsdoc"
+      id    = or_default(input$step_id,    next_id),
+      who   = or_default(input$step_who,   "System Component"),
+      what  = or_default(input$step_what,  "Component implementation"),
+      where = or_default(input$step_where, active_filename()),
+      when  = or_default(input$step_when,  "On invocation"),
+      why   = or_default(input$step_why,   "Architectural documentation"),
+      how   = or_default(input$step_how,   "Implementation handles logic"),
+      style = or_default(input$trce_style, "jsdoc")
     )
 
     new_lines <- inject_single_block(lines, comp$line1, block)
@@ -476,7 +616,9 @@ server <- function(input, output, session) {
     comp <- targets[[curr]]
 
     # Compute default proposed annotation values for this component
-    auto_id <- sprintf("%s-%03d", input$trce_prefix %||% "trce-r", curr)
+    prefix   <- or_default(input$trce_prefix, "trce-r")
+    existing <- max_existing_trace_number(strsplit(working_code(), "\n")[[1]], prefix)
+    auto_id  <- sprintf("%s-%03d", prefix, existing + 1L)
     auto_who <- determine_who(comp)
     auto_what <- determine_what(comp)
     auto_where <- determine_where(comp, active_filename())
@@ -542,6 +684,40 @@ server <- function(input, output, session) {
   })
 
   # --- OUTPUTS ---
+
+  # --- HEADER & DIAGNOSTIC BANNERS ---
+
+  output$active_file_badge <- renderUI({
+    div(style = "margin-top: 10px;",
+      span(class = "badge-info", sprintf("Current file: %s", active_filename()))
+    )
+  })
+
+  # Explains why analysis is unavailable, instead of rendering nothing at all.
+  output$load_error_banner <- renderUI({
+    msg <- load_error()
+    if (is.null(msg)) return(NULL)
+
+    div(class = "card", style = "border-left: 5px solid #ef4444; background: #fef2f2;",
+      h4(style = "margin: 0 0 6px; color: #991b1b;", "This R file could not be analysed"),
+      p(style = "margin: 0 0 8px; color: #7f1d1d; font-size: 13px;", msg),
+      tags$ul(style = "margin: 0; padding-left: 18px; color: #7f1d1d; font-size: 12px;",
+        tags$li("R stops at the first syntax error, so check the line quoted above."),
+        tags$li("Unbalanced brackets or quotes, or a missing close parenthesis, are the usual causes."),
+        tags$li("Your code is still shown in full on the 'Annotated Code & Traces' tab.")
+      )
+    )
+  })
+
+  # Tells the user when a non-UTF-8 file was re-interpreted rather than failing.
+  output$encoding_note_banner <- renderUI({
+    note <- encoding_note()
+    if (is.null(note)) return(NULL)
+
+    div(class = "card", style = "border-left: 5px solid #f59e0b; background: #fffbeb;",
+      p(style = "margin: 0; color: #92400e; font-size: 13px;", note)
+    )
+  })
 
   output$audit_status_banner <- renderUI({
     v <- validation_data()
@@ -623,6 +799,12 @@ server <- function(input, output, session) {
         stringsAsFactors = FALSE
       )
     }
+    # A file with no top-level expressions (empty, or comments only) leaves
+    # `rows` empty; do.call(rbind, list()) returns NULL, so guard like the
+    # components table does.
+    if (length(rows) == 0) {
+      return(data.frame(Status = "No top-level expressions found in this file."))
+    }
     do.call(rbind, rows)
   })
 
@@ -633,38 +815,37 @@ server <- function(input, output, session) {
     head(p$parse_data[, c("line1", "col1", "line2", "col2", "token", "text")], 20)
   })
 
-  # File downloads
-  output$download_r <- downloadHandler(
-    filename = function() paste0("annotated_", active_filename()),
-    content = function(file) writeLines(working_code(), file)
-  )
+  # File downloads.
+  # Two tabs expose the same pair of downloads, so the handlers are built by
+  # shared factories instead of being duplicated.
+  build_r_download <- function() {
+    downloadHandler(
+      filename = function() paste0("annotated_", active_filename()),
+      content = function(file) writeLines(enc2utf8(working_code()), file)
+    )
+  }
 
-  output$download_r_walkthrough <- downloadHandler(
-    filename = function() paste0("annotated_", active_filename()),
-    content = function(file) writeLines(working_code(), file)
-  )
+  build_json_download <- function() {
+    downloadHandler(
+      filename = function() paste0("traces_", sub("\\.R$", "", active_filename()), ".json"),
+      content = function(file) {
+        p <- parsed_data()
+        if (is.null(p)) {
+          # Unparseable file: export an empty trace set rather than erroring.
+          writeLines(export_trace_json(list(list(entries = list(), file_name = active_filename()))), file)
+          return()
+        }
+        a <- analyze_r_file(p)
+        val <- validate_r_annotations(p$file_path, p, a)
+        writeLines(export_trace_json(list(val)), file)
+      }
+    )
+  }
 
-  output$download_json <- downloadHandler(
-    filename = function() paste0("traces_", sub("\\.R$", "", active_filename()), ".json"),
-    content = function(file) {
-      tmp <- tempfile(fileext = ".R")
-      writeLines(working_code(), tmp)
-      on.exit(unlink(tmp))
-      val <- validate_r_annotations(tmp)
-      writeLines(export_trace_json(list(val)), file)
-    }
-  )
-
-  output$download_json_walkthrough <- downloadHandler(
-    filename = function() paste0("traces_", sub("\\.R$", "", active_filename()), ".json"),
-    content = function(file) {
-      tmp <- tempfile(fileext = ".R")
-      writeLines(working_code(), tmp)
-      on.exit(unlink(tmp))
-      val <- validate_r_annotations(tmp)
-      writeLines(export_trace_json(list(val)), file)
-    }
-  )
+  output$download_r <- build_r_download()
+  output$download_r_walkthrough <- build_r_download()
+  output$download_json <- build_json_download()
+  output$download_json_walkthrough <- build_json_download()
 
   # --- STUDENT STUDIO SERVER OUTPUTS ---
   output$student_pitfalls_ui <- renderUI({
@@ -677,7 +858,7 @@ server <- function(input, output, session) {
       return(div(class = "card", style = "border-left: 5px solid #10b981; background: #f0fdf4;",
         h3(style = "color: #166534; margin-top: 0;", "🎉 Clean Bill of Health!"),
         p(style = "color: #15803d; font-size: 15px;",
-          "R-TRCE scanned this script and found zero common beginner traps, NA comparison errors, or quadratic copy-on-modify memory bottlenecks.")
+          sprintf("%s scanned this script and found zero common beginner traps, NA comparison errors, or quadratic copy-on-modify memory bottlenecks.", APP_NAME))
       ))
     }
 
@@ -868,6 +1049,15 @@ server <- function(input, output, session) {
 # --- STANDALONE APP LAUNCHER ---
 app <- shinyApp(ui = ui, server = server)
 
+# /**
+#  * @trce-id trce-studio-004
+#  * @trce-who CLI Runner / Automated Batch Process
+#  * @trce-what Evaluates command-line arguments and dispatches script execution (interactive_guard)
+#  * @trce-where app.R -> interactive_guard | Upstream: Command-line invocation | Downstream: Leaf node / standard library
+#  * @trce-when When executed from bash / shell via Rscript with trailing arguments
+#  * @trce-why Enables headless automation, CI/CD execution, and reproducible CLI workflows
+#  * @trce-how Checks interactive() state, retrieves commandArgs(trailingOnly = TRUE), and invokes main router
+#  */
 if (!interactive()) {
   port <- as.integer(Sys.getenv("PORT", "8083"))
   # Bind on 0.0.0.0 by default on Linux/Baguette/Crostini so container port forwarding and host access works seamlessly
@@ -885,7 +1075,7 @@ if (!interactive()) {
   }, silent = TRUE)
 
   message("==================================================================")
-  message("  R-TRCE Interactive Studio & Guided Walkthrough")
+  message(sprintf("  %s", STUDIO_NAME))
   message("==================================================================")
   message(sprintf("  Listening on: http://%s:%d", host, port))
   message("\n  Access the Studio in your browser via any of these URLs:")

@@ -1,23 +1,23 @@
 <#
 .SYNOPSIS
-    Cross-Platform Auto-Installer for R-TRCE on Windows 10 and Windows 11.
+    Cross-Platform Auto-Installer for R-TRCE Code Assistant on Windows 10 and Windows 11.
 .DESCRIPTION
-    Installs R-TRCE, configures user PATH environment variables, creates Windows
-    cmd wrappers (r-trce.cmd and r-trce-studio.cmd), verifies R dependencies,
+    Installs R-TRCE Code Assistant, configures user PATH environment variables, creates Windows
+    cmd wrappers (rtrce.cmd and rtrce-studio.cmd, plus legacy r-trce aliases), verifies R dependencies,
     and sets up Desktop and Start Menu shortcuts.
 
     Copyright (c) 2026 Asterov Labs. All Rights Reserved.
     Licensed under the Asterov Labs Proprietary Software License.
     See LICENSE file in the project root for full license terms.
 .EXAMPLE
-    irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/install.ps1 | iex
 .EXAMPLE
-    .\install.ps1 -InstallDir "C:\Tools\R-TRCE"
+    .\install.ps1 -InstallDir "C:\Tools\R-TRCE-Code-Assistant"
 #>
 
 [CmdletBinding()]
 param(
-    [string]$InstallDir = "$env:LOCALAPPDATA\R-TRCE"
+    [string]$InstallDir = "$env:LOCALAPPDATA\R-TRCE-Code-Assistant"
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +30,7 @@ Write-Host @"
  |_| \_\       |_| |_| \_\\____|_____|
 "@ -ForegroundColor Cyan
 
-Write-Host "R-TRCE: Architectural Comprehension & Student Tutor Suite" -ForegroundColor White
+Write-Host "R-TRCE Code Assistant: Architectural Comprehension & Student Tutor Suite" -ForegroundColor White
 Write-Host "Target Installation Path: $InstallDir`n" -ForegroundColor Yellow
 
 # 1. Locate R Installation on Windows
@@ -87,7 +87,7 @@ if ($rscriptBin) {
     Write-Host " ($rscriptBin)"
 } else {
     Write-Host "Not found." -ForegroundColor Yellow
-    Write-Host "`n[!] R is required to run R-TRCE." -ForegroundColor Yellow
+    Write-Host "`n[!] R is required to run R-TRCE Code Assistant." -ForegroundColor Yellow
     
     # Try winget if available on Windows 10/11
     $wingetCmd = Get-Command "winget.exe" -ErrorAction SilentlyContinue
@@ -127,7 +127,7 @@ if ($rscriptBin) {
     }
     
     if (-not $rscriptBin) {
-        Write-Host "[!] Warning: R not found. R-TRCE files will be installed, but commands won't work until R is available." -ForegroundColor Yellow
+        Write-Host "[!] Warning: R not found. R-TRCE Code Assistant files will be installed, but commands won't work until R is available." -ForegroundColor Yellow
         $rscriptBin = "Rscript.exe"
     }
 }
@@ -146,22 +146,22 @@ if ($currentScriptDir -and (Test-Path "$currentScriptDir\r_trce.R") -and (Test-P
 }
 
 if (-not $localInstall) {
-    Write-Host "Downloading R-TRCE from GitHub..." -ForegroundColor Cyan
-    $zipUrl = "https://github.com/AsterovLabs/R-TRCE/archive/refs/heads/main.zip"
-    $tempZip = Join-Path $env:TEMP "r-trce-$(Get-Date -Format 'yyyyMMddHHmmss').zip"
+    Write-Host "Downloading R-TRCE Code Assistant from GitHub..." -ForegroundColor Cyan
+    $zipUrl = "https://github.com/AsterovLabs/R-TRCE-Code-Assistant/archive/refs/heads/main.zip"
+    $tempZip = Join-Path $env:TEMP "rtrce-code-assistant-$(Get-Date -Format 'yyyyMMddHHmmss').zip"
     
     try {
         # Use TLS 1.2+ for compatibility
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
         Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip -UseBasicParsing
     } catch {
-        Write-Host "[!] Error: Failed to download R-TRCE from GitHub." -ForegroundColor Red
+        Write-Host "[!] Error: Failed to download R-TRCE Code Assistant from GitHub." -ForegroundColor Red
         Write-Host "    Error: $_" -ForegroundColor Red
-        Write-Host "    Please download manually from: https://github.com/AsterovLabs/R-TRCE/releases" -ForegroundColor Yellow
+        Write-Host "    Please download manually from: https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases" -ForegroundColor Yellow
         exit 1
     }
     
-    $tempExtract = Join-Path $env:TEMP "r-trce-extract-$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $tempExtract = Join-Path $env:TEMP "rtrce-code-assistant-extract-$(Get-Date -Format 'yyyyMMddHHmmss')"
     if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract }
     
     try {
@@ -172,7 +172,7 @@ if (-not $localInstall) {
         }
         Copy-Item -Path "$($subDir.FullName)\*" -Destination $InstallDir -Recurse -Force
     } catch {
-        Write-Host "[!] Error: Failed to extract R-TRCE archive." -ForegroundColor Red
+        Write-Host "[!] Error: Failed to extract R-TRCE Code Assistant archive." -ForegroundColor Red
         Write-Host "    Error: $_" -ForegroundColor Red
         exit 1
     } finally {
@@ -184,7 +184,7 @@ if (-not $localInstall) {
 # Verify critical files exist
 if (-not (Test-Path "$InstallDir\r_trce.R")) {
     Write-Host "[!] Error: Installation appears incomplete (r_trce.R not found)." -ForegroundColor Red
-    Write-Host "    Please try again or download from: https://github.com/AsterovLabs/R-TRCE/releases" -ForegroundColor Yellow
+    Write-Host "    Please try again or download from: https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases" -ForegroundColor Yellow
     exit 1
 }
 
@@ -214,7 +214,7 @@ if ($rscriptBin -and ($rscriptBin -ne "Rscript.exe" -or (Get-Command $rscriptBin
 # 4. Generate Windows CMD Executable Wrappers
 Write-Host "Generating CLI and Studio wrappers in $binDir..."
 
-# r-trce.cmd (CLI router)
+# rtrce.cmd (CLI router)
 $escapedInstallDir = $InstallDir -replace '\\', '\\'
 $escapedRscriptBin = $rscriptBin -replace '\\', '\\'
 
@@ -236,9 +236,12 @@ if not exist "%RSCRIPT_BIN%" (
 
 "%RSCRIPT_BIN%" "%INSTALL_DIR%\r_trce.R" %*
 "@
+Set-Content -Path "$binDir\rtrce.cmd" -Value $rTrceCmd -Encoding ASCII
+
+# Legacy alias so existing habits and scripts keep working
 Set-Content -Path "$binDir\r-trce.cmd" -Value $rTrceCmd -Encoding ASCII
 
-# r-trce-studio.cmd (Interactive Studio)
+# rtrce-studio.cmd (Interactive Studio)
 $rTrceStudioCmd = @"
 @echo off
 setlocal
@@ -258,10 +261,13 @@ if not exist "%RSCRIPT_BIN%" (
 set "PORT=8083"
 set "HOST=127.0.0.1"
 
-echo Starting R-TRCE Studio on http://%HOST%:%PORT% ...
+echo Starting R-TRCE Code Assistant Studio on http://%HOST%:%PORT% ...
 start http://%HOST%:%PORT%
 "%RSCRIPT_BIN%" "%INSTALL_DIR%\app.R"
 "@
+Set-Content -Path "$binDir\rtrce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
+
+# Legacy alias for the Studio launcher
 Set-Content -Path "$binDir\r-trce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
 
 # 5. Add $binDir to User Environment PATH
@@ -290,20 +296,20 @@ try {
     # Desktop Shortcut
     $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
     if ($desktopPath -and (Test-Path $desktopPath)) {
-        $shortcutDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE Studio.lnk")
-        $shortcutDesktop.TargetPath = "$binDir\r-trce-studio.cmd"
+        $shortcutDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE Code Assistant Studio.lnk")
+        $shortcutDesktop.TargetPath = "$binDir\rtrce-studio.cmd"
         $shortcutDesktop.WorkingDirectory = $InstallDir
-        $shortcutDesktop.Description = "R-TRCE Interactive Studio & Guided Walkthrough"
+        $shortcutDesktop.Description = "R-TRCE Code Assistant Interactive Studio & Guided Walkthrough"
         $shortcutDesktop.Save()
     }
     
     # Start Menu Shortcut
     $startMenuPrograms = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
     if ($startMenuPrograms -and (Test-Path $startMenuPrograms)) {
-        $shortcutStart = $wshShell.CreateShortcut("$startMenuPrograms\R-TRCE Studio.lnk")
-        $shortcutStart.TargetPath = "$binDir\r-trce-studio.cmd"
+        $shortcutStart = $wshShell.CreateShortcut("$startMenuPrograms\R-TRCE Code Assistant Studio.lnk")
+        $shortcutStart.TargetPath = "$binDir\rtrce-studio.cmd"
         $shortcutStart.WorkingDirectory = $InstallDir
-        $shortcutStart.Description = "R-TRCE Interactive Studio & Guided Walkthrough"
+        $shortcutStart.Description = "R-TRCE Code Assistant Interactive Studio & Guided Walkthrough"
         $shortcutStart.Save()
     }
     
@@ -315,17 +321,19 @@ try {
 Write-Host @"
 
 ==================================================================
-  R-TRCE installed successfully on Windows!
+  R-TRCE Code Assistant installed successfully on Windows!
 ==================================================================
 
 Quick Start Commands (in PowerShell or CMD):
-  r-trce tutor script.R       Student walkthrough & pitfall audit
-  r-trce pitfalls script.R    Audit beginner traps & memory bottlenecks
-  r-trce quiz script.R        Generate comprehension quiz
-  r-trce explain script.R     Architectural explanation & dependency flow
-  r-trce-studio               Launch interactive web studio
+  rtrce tutor script.R        Student walkthrough & pitfall audit
+  rtrce pitfalls script.R     Audit beginner traps & memory bottlenecks
+  rtrce quiz script.R         Generate comprehension quiz
+  rtrce explain script.R      Architectural explanation & dependency flow
+  rtrce help                  Every command and option
+  rtrce-studio                Launch interactive web studio
 
-You can also launch "R-TRCE Studio" directly from your Desktop or Start Menu!
+You can also launch "R-TRCE Code Assistant Studio" directly from your Desktop or Start Menu!
 
+NOTE: The older names 'r-trce' and 'r-trce-studio' still work as aliases.
 NOTE: You may need to restart your terminal for PATH changes to take effect.
 "@ -ForegroundColor Green

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# install.sh -- Cross-Platform Auto-Installer for R-TRCE (Linux & macOS)
+# install.sh -- Cross-Platform Auto-Installer for R-TRCE Code Assistant (Linux & macOS)
 # =============================================================================
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # USAGE:
-#   curl -fsSL https://raw.githubusercontent.com/AsterovLabs/R-TRCE/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/install.sh | bash
 #   OR locally:
 #   ./install.sh
 #   OR non-interactive (CI):
@@ -16,10 +16,17 @@
 
 set -e
 
-REPO_URL="https://github.com/AsterovLabs/R-TRCE.git"
-INSTALL_DIR="${R_TRCE_HOME:-$HOME/.r-trce}"
+REPO_URL="https://github.com/AsterovLabs/R-TRCE-Code-Assistant.git"
 BIN_DIR="$HOME/.local/bin"
 NO_INTERACTION=false
+
+# Where to install. RTRCE_HOME wins; the previous R_TRCE_HOME variable and an
+# existing ~/.r-trce checkout are still honoured so upgrading needs no cleanup.
+DEFAULT_INSTALL_DIR="$HOME/.r-trce-code-assistant"
+if [ -d "$HOME/.r-trce" ] && [ ! -d "$DEFAULT_INSTALL_DIR" ]; then
+  DEFAULT_INSTALL_DIR="$HOME/.r-trce"
+fi
+INSTALL_DIR="${RTRCE_HOME:-${R_TRCE_HOME:-$DEFAULT_INSTALL_DIR}}"
 
 # Parse arguments
 for arg in "$@"; do
@@ -43,7 +50,7 @@ echo " | |_) |____   | | | |_) | |   |  _|  "
 echo " |  _ <|____|  | | |  _ <| |___|  ___ "
 echo " |_| \_\       |_| |_| \_\\\____|_____|"
 echo -e "${NC}"
-echo -e "${BOLD}R-TRCE: Architectural Comprehension & Student Tutor Suite${NC}"
+echo -e "${BOLD}R-TRCE Code Assistant: Architectural Comprehension & Student Tutor Suite${NC}"
 echo -e "Installing to: ${YELLOW}${INSTALL_DIR}${NC}\n"
 
 # Helper: prompt the user even when script is piped via curl | bash.
@@ -96,7 +103,7 @@ if [ -n "$RSCRIPT_BIN" ]; then
   echo -e "${GREEN}Found!${NC} ($R_VER at $RSCRIPT_BIN)"
 else
   echo -e "${YELLOW}Not detected.${NC}"
-  echo -e "\n${YELLOW}[!] R is required for R-TRCE to execute.${NC}"
+  echo -e "\n${YELLOW}[!] R is required for R-TRCE Code Assistant to execute.${NC}"
   echo "Please install R using your system package manager:"
   if [ "$PLATFORM" = "macOS" ]; then
     echo "  brew install r"
@@ -122,7 +129,7 @@ fi
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$BIN_DIR"
 
-# Detect if running from a local R-TRCE checkout.
+# Detect if running from a local R-TRCE Code Assistant checkout.
 # BASH_SOURCE may be empty when piped via curl | bash, so handle gracefully.
 SCRIPT_DIR=""
 if [ -n "${BASH_SOURCE[0]:-}" ] && [ "${BASH_SOURCE[0]}" != "bash" ]; then
@@ -135,7 +142,7 @@ if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/r_trce.R" ] && [ -d "$SCRIPT_DIR/R"
     cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/"
   fi
 else
-  echo "Fetching latest R-TRCE from GitHub..."
+  echo "Fetching latest R-TRCE Code Assistant from GitHub..."
   DOWNLOAD_OK=false
 
   # Attempt 1: git clone (disable terminal prompts to prevent hanging)
@@ -162,7 +169,7 @@ else
 
   # Attempt 2: curl + tar archive download
   if [ "$DOWNLOAD_OK" = false ]; then
-    TAR_URL="https://github.com/AsterovLabs/R-TRCE/archive/refs/heads/main.tar.gz"
+    TAR_URL="https://github.com/AsterovLabs/R-TRCE-Code-Assistant/archive/refs/heads/main.tar.gz"
     if command -v curl >/dev/null 2>&1; then
       if curl -fsSL "$TAR_URL" | tar -xz --strip-components=1 -C "$INSTALL_DIR" 2>/dev/null; then
         DOWNLOAD_OK=true
@@ -175,9 +182,9 @@ else
   fi
 
   if [ "$DOWNLOAD_OK" = false ]; then
-    echo -e "${RED}[!] Error: Could not download R-TRCE.${NC}"
+    echo -e "${RED}[!] Error: Could not download R-TRCE Code Assistant.${NC}"
     echo "Please check your internet connection and try again."
-    echo "Or download manually from: https://github.com/AsterovLabs/R-TRCE/releases"
+    echo "Or download manually from: https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases"
     exit 1
   fi
 fi
@@ -185,7 +192,7 @@ fi
 # Verify the download has the essential files
 if [ ! -f "$INSTALL_DIR/r_trce.R" ]; then
   echo -e "${RED}[!] Error: Installation appears incomplete (r_trce.R not found).${NC}"
-  echo "Please try again or download manually from: https://github.com/AsterovLabs/R-TRCE/releases"
+  echo "Please try again or download manually from: https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases"
   exit 1
 fi
 
@@ -230,8 +237,8 @@ fi
 # 5. Create Executable Wrappers in ~/.local/bin
 echo "Creating CLI and Studio executable wrappers..."
 
-# r-trce wrapper
-cat << 'WRAPPER_EOF' > "$BIN_DIR/r-trce"
+# rtrce wrapper (CLI router)
+cat << 'WRAPPER_EOF' > "$BIN_DIR/rtrce"
 #!/usr/bin/env bash
 INSTALL_DIR="__INSTALL_DIR__"
 R_BIN="__RSCRIPT_BIN__"
@@ -248,8 +255,8 @@ fi
 exec "$R_BIN" "$INSTALL_DIR/r_trce.R" "$@"
 WRAPPER_EOF
 
-# r-trce-studio wrapper
-cat << 'WRAPPER_EOF' > "$BIN_DIR/r-trce-studio"
+# rtrce-studio wrapper (interactive Studio)
+cat << 'WRAPPER_EOF' > "$BIN_DIR/rtrce-studio"
 #!/usr/bin/env bash
 INSTALL_DIR="__INSTALL_DIR__"
 R_BIN="__RSCRIPT_BIN__"
@@ -274,7 +281,7 @@ if command -v hostname >/dev/null 2>&1; then
 fi
 
 echo "=================================================================="
-echo "  Starting R-TRCE Interactive Studio"
+echo "  Starting R-TRCE Code Assistant Interactive Studio"
 echo "=================================================================="
 echo "  Listening on: http://${HOST}:${PORT}"
 echo ""
@@ -307,14 +314,18 @@ WRAPPER_EOF
 
 # Substitute actual paths — handle GNU sed (Linux) vs BSD sed (macOS)
 if [ "$PLATFORM" = "macOS" ]; then
-  sed -i '' "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/r-trce" "$BIN_DIR/r-trce-studio"
-  sed -i '' "s|__RSCRIPT_BIN__|$RSCRIPT_BIN|g" "$BIN_DIR/r-trce" "$BIN_DIR/r-trce-studio"
+  sed -i '' "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
+  sed -i '' "s|__RSCRIPT_BIN__|$RSCRIPT_BIN|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
 else
-  sed -i "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/r-trce" "$BIN_DIR/r-trce-studio"
-  sed -i "s|__RSCRIPT_BIN__|$RSCRIPT_BIN|g" "$BIN_DIR/r-trce" "$BIN_DIR/r-trce-studio"
+  sed -i "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
+  sed -i "s|__RSCRIPT_BIN__|$RSCRIPT_BIN|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
 fi
 
-chmod +x "$BIN_DIR/r-trce" "$BIN_DIR/r-trce-studio"
+chmod +x "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
+
+# Legacy command names kept as aliases so existing habits and scripts keep working
+ln -sf "rtrce"        "$BIN_DIR/r-trce"
+ln -sf "rtrce-studio" "$BIN_DIR/r-trce-studio"
 
 # 6. Verify PATH integration
 PATH_CONFIGURED=false
@@ -349,14 +360,17 @@ if [ "$PATH_CONFIGURED" = false ]; then
 fi
 
 echo -e "\n${GREEN}=================================================================="
-echo -e "  R-TRCE installed successfully!"
+echo -e "  R-TRCE Code Assistant installed successfully!"
 echo -e "==================================================================${NC}\n"
 echo -e "Quick Start Commands:"
-echo -e "  ${BOLD}r-trce tutor script.R${NC}       Student walkthrough & pitfall audit"
-echo -e "  ${BOLD}r-trce pitfalls script.R${NC}    Quick beginner pitfall sentinel"
-echo -e "  ${BOLD}r-trce quiz script.R${NC}        Generate student comprehension quiz"
-echo -e "  ${BOLD}r-trce explain script.R${NC}     Full architectural explanation"
-echo -e "  ${BOLD}r-trce-studio${NC}               Launch interactive web studio"
+echo -e "  ${BOLD}rtrce tutor script.R${NC}        Student walkthrough & pitfall audit"
+echo -e "  ${BOLD}rtrce pitfalls script.R${NC}     Quick beginner pitfall sentinel"
+echo -e "  ${BOLD}rtrce quiz script.R${NC}         Generate student comprehension quiz"
+echo -e "  ${BOLD}rtrce explain script.R${NC}      Full architectural explanation"
+echo -e "  ${BOLD}rtrce help${NC}                  Every command and option"
+echo -e "  ${BOLD}rtrce-studio${NC}                Launch interactive web studio"
+echo ""
+echo -e "${YELLOW}Note:${NC} the older names 'r-trce' and 'r-trce-studio' still work as aliases."
 echo ""
 if [ "$PATH_CONFIGURED" = false ]; then
   echo -e "${YELLOW}Note: To use commands immediately in this terminal, run:${NC}"

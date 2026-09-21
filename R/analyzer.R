@@ -1,12 +1,12 @@
 # =============================================================================
-# R/analyzer.R -- R-TRCE Semantic Analyzer
+# R/analyzer.R -- R-TRCE Code Assistant Semantic Analyzer
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # /**
 #  * @trce-id trce-rparse-003
-#  * @trce-who R-TRCE Engine / Semantic Analysis Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Semantic Analysis Subsystem
 #  * @trce-what Analyzes parsed R AST structures to detect architectural patterns, functions, Shiny graphs, schemas, and pipelines
 #  * @trce-where R/analyzer.R -> analyze_r_file()
 #  * @trce-when Executed after AST parsing to build the high-level semantic model of an R file
@@ -69,6 +69,15 @@ analyze_r_file <- function(parsed_obj) {
 }
 
 # Classify a single top-level expression
+# /**
+#  * @trce-id trce-analyzer-001
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes classify_expression(item, file_name, file_path) to handle utility_function operations
+#  * @trce-where analyzer.R -> classify_expression | Upstream: analyze_r_file | Downstream: parse_existing_trce, detect_imports, analyze_function_node
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (item, file_name, file_path); mutates parent environment state via '<<-'; invokes local routines [parse_existing_trce, detect_imports, analyze_function_node]
+#  */
 classify_expression <- function(item, file_name, file_path) {
   e <- item$expr
   lines <- item$code
@@ -197,6 +206,15 @@ classify_expression <- function(item, file_name, file_path) {
 }
 
 # Analyze an R function node
+# /**
+#  * @trce-id trce-analyzer-002
+#  * @trce-who Statistical Estimation Engine / ANOVA Decomposer
+#  * @trce-what Executes analyze_function_node(name, rhs, line1, line2, code, file_path) to handle statistical_model operations
+#  * @trce-where analyzer.R -> analyze_function_node | Upstream: classify_expression | Downstream: extract_function_calls
+#  * @trce-when During analysis execution phase after data tables are validated and joined
+#  * @trce-why Extracts rigorous parameter estimates, standard errors, and confidence intervals
+#  * @trce-how Accepts parameters (name, rhs, line1, line2, code, file_path); mutates parent environment state via '<<-'; invokes local routines [extract_function_calls]
+#  */
 analyze_function_node <- function(name, rhs, line1, line2, code, file_path) {
   # Formal arguments
   formals_list <- as.list(rhs[[2]])
@@ -257,6 +275,15 @@ analyze_function_node <- function(name, rhs, line1, line2, code, file_path) {
 }
 
 # Walk AST recursively to extract called function names
+# /**
+#  * @trce-id trce-analyzer-003
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes extract_function_calls(node) to handle utility_function operations
+#  * @trce-where analyzer.R -> extract_function_calls | Upstream: analyze_function_node | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (node); operates self-contained
+#  */
 extract_function_calls <- function(node) {
   if (is.call(node)) {
     head_token <- tryCatch(deparse(node[[1]]), error = function(e) "")
@@ -276,6 +303,15 @@ extract_function_calls <- function(node) {
 }
 
 # Detect package imports from AST node
+# /**
+#  * @trce-id trce-analyzer-004
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes detect_imports(node) to handle utility_function operations
+#  * @trce-where analyzer.R -> detect_imports | Upstream: classify_expression | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (node); operates self-contained
+#  */
 detect_imports <- function(node) {
   pkgs <- character(0)
   if (is.call(node)) {
@@ -295,7 +331,7 @@ detect_imports <- function(node) {
 
 # /**
 #  * @trce-id trce-rparse-004
-#  * @trce-who R-TRCE Engine / Dependency Resolver
+#  * @trce-who R-TRCE Code Assistant Engine / Dependency Resolver
 #  * @trce-what Resolves caller-callee relationships across all functions defined within the R file
 #  * @trce-where R/analyzer.R -> resolve_dependencies()
 #  * @trce-when Executed during pass 2 of semantic analysis after all function names are registered
@@ -333,6 +369,15 @@ resolve_dependencies <- function(components, defined_funcs) {
 }
 
 # Parse existing TRCE annotations from comment lines
+# /**
+#  * @trce-id trce-analyzer-005
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes parse_existing_trce(comment_lines) to handle utility_function operations
+#  * @trce-where analyzer.R -> parse_existing_trce | Upstream: classify_expression | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comment_lines); operates self-contained
+#  */
 parse_existing_trce <- function(comment_lines) {
   if (length(comment_lines) == 0) return(NULL)
 
@@ -351,6 +396,12 @@ parse_existing_trce <- function(comment_lines) {
       if (length(match) == 3) {
         k <- match[2]
         v <- trimws(match[3])
+
+        # Prose can mention a directive, e.g. "# the @trce-id must be unique".
+        # Accept an `id` only when it satisfies the canonical pattern, otherwise
+        # that prose would shadow the real annotation's ID.
+        if (k == "id" && !grepl(TRACE_ID_REGEX, v)) next
+
         fields[[k]] <- v
       }
     }
@@ -363,6 +414,15 @@ parse_existing_trce <- function(comment_lines) {
 }
 
 # Determine overall file archetype
+# /**
+#  * @trce-id trce-analyzer-006
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes detect_file_archetype(components, imports, file_name) to handle utility_function operations
+#  * @trce-where analyzer.R -> detect_file_archetype | Upstream: analyze_r_file | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (components, imports, file_name); operates self-contained
+#  */
 detect_file_archetype <- function(components, imports, file_name) {
   kinds <- sapply(components, function(c) c$kind)
   archetypes <- sapply(components, function(c) if (!is.null(c$archetype)) c$archetype else "")

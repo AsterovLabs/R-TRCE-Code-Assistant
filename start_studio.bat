@@ -7,7 +7,7 @@
 :: See LICENSE file in the project root for full license terms.
 :: =============================================================================
 
-title R-TRCE Studio
+title R-TRCE Code Assistant Studio
 cd /d "%~dp0"
 
 set "RSCRIPT_BIN=Rscript.exe"
@@ -34,7 +34,7 @@ set "PORT=8083"
 set "HOST=127.0.0.1"
 
 echo ==================================================================
-echo   Starting R-TRCE Interactive Studio
+echo   Starting R-TRCE Code Assistant Interactive Studio
 echo   Access at: http://%HOST%:%PORT%
 echo ==================================================================
 

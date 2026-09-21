@@ -1,6 +1,6 @@
 @echo off
 :: =============================================================================
-:: install.bat -- Double-Click Windows Installer for R-TRCE
+:: install.bat -- Double-Click Windows Installer for R-TRCE Code Assistant
 :: Works seamlessly on Windows 10 & Windows 11
 :: =============================================================================
 :: Copyright (c) 2026 Asterov Labs. All Rights Reserved.
@@ -8,11 +8,11 @@
 :: See LICENSE file in the project root for full license terms.
 :: =============================================================================
 
-title R-TRCE Auto-Installer
+title R-TRCE Code Assistant Auto-Installer
 cd /d "%~dp0"
 
 echo ==================================================================
-echo   R-TRCE Windows Auto-Installer
+echo   R-TRCE Code Assistant Windows Auto-Installer
 echo ==================================================================
 echo.
 echo Launching PowerShell installer with execution bypass...

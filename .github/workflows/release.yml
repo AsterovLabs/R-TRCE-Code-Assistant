@@ -20,26 +20,26 @@ jobs:
       - name: Create Release Bundles
         run: |
           VERSION="${GITHUB_REF_NAME:-v1.0.0}"
-          echo "Packaging R-TRCE $VERSION..."
+          echo "Packaging R-TRCE Code Assistant $VERSION..."
 
           mkdir -p dist/linux dist/macos dist/windows
 
           # 1. Linux Bundle
-          mkdir -p dist/linux/r-trce
-          cp -r r_trce.R app.R start_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R dist/linux/r-trce/
-          chmod +x dist/linux/r-trce/r_trce.R dist/linux/r-trce/app.R dist/linux/r-trce/start_studio.sh dist/linux/r-trce/install.sh
-          tar -czf dist/r-trce-linux-all.tar.gz -C dist/linux r-trce
+          mkdir -p dist/linux/rtrce-code-assistant
+          cp -r r_trce.R app.R start_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R dist/linux/rtrce-code-assistant/
+          chmod +x dist/linux/rtrce-code-assistant/r_trce.R dist/linux/rtrce-code-assistant/app.R dist/linux/rtrce-code-assistant/start_studio.sh dist/linux/rtrce-code-assistant/install.sh
+          tar -czf dist/rtrce-code-assistant-linux-all.tar.gz -C dist/linux rtrce-code-assistant
 
           # 2. macOS Bundle
-          mkdir -p dist/macos/r-trce
-          cp -r r_trce.R app.R start_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R dist/macos/r-trce/
-          chmod +x dist/macos/r-trce/r_trce.R dist/macos/r-trce/app.R dist/macos/r-trce/start_studio.sh dist/macos/r-trce/install.sh
-          tar -czf dist/r-trce-macos-all.tar.gz -C dist/macos r-trce
+          mkdir -p dist/macos/rtrce-code-assistant
+          cp -r r_trce.R app.R start_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R dist/macos/rtrce-code-assistant/
+          chmod +x dist/macos/rtrce-code-assistant/r_trce.R dist/macos/rtrce-code-assistant/app.R dist/macos/rtrce-code-assistant/start_studio.sh dist/macos/rtrce-code-assistant/install.sh
+          tar -czf dist/rtrce-code-assistant-macos-all.tar.gz -C dist/macos rtrce-code-assistant
 
           # 3. Windows 10 / 11 Bundle
-          mkdir -p dist/windows/r-trce
-          cp -r r_trce.R app.R start_studio.bat install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R dist/windows/r-trce/
-          zip -r dist/r-trce-windows-all.zip dist/windows/r-trce
+          mkdir -p dist/windows/rtrce-code-assistant
+          cp -r r_trce.R app.R start_studio.bat install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R dist/windows/rtrce-code-assistant/
+          zip -r dist/rtrce-code-assistant-windows-all.zip dist/windows/rtrce-code-assistant
 
           # Standalone installer scripts and license for direct download
           cp install.sh dist/install.sh
@@ -51,30 +51,30 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/r-trce-linux-all.tar.gz
-            dist/r-trce-macos-all.tar.gz
-            dist/r-trce-windows-all.zip
+            dist/rtrce-code-assistant-linux-all.tar.gz
+            dist/rtrce-code-assistant-macos-all.tar.gz
+            dist/rtrce-code-assistant-windows-all.zip
             dist/install.sh
             dist/install.ps1
             dist/install.bat
-          name: "R-TRCE ${{ github.ref_name }}"
+          name: "R-TRCE Code Assistant ${{ github.ref_name }}"
           draft: false
           prerelease: false
           body: |
-            ## R-TRCE Release ${{ github.ref_name }}
+            ## R-TRCE Code Assistant Release ${{ github.ref_name }}
             
-            Multi-platform release of R-TRCE: Architectural analysis, AST comprehension, 6-point TRCE telemetry, and student pedagogical suite.
+            Multi-platform release of R-TRCE Code Assistant: Architectural analysis, AST comprehension, 6-point TRCE telemetry, and student pedagogical suite.
             
             ### ⚡ 1-Minute Quick Install
 
             #### 🐧 Linux & 🍏 macOS
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/AsterovLabs/R-TRCE/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/install.sh | bash
             ```
 
             #### 🪟 Windows 11 & Windows 10 (PowerShell)
             ```powershell
-            irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE/main/install.ps1 | iex
+            irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/install.ps1 | iex
             ```
 
             ---
@@ -83,6 +83,6 @@ jobs:
             
             | Platform | Download | Instructions |
             | :--- | :--- | :--- |
-            | **Windows 10 & 11** | [`r-trce-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE/releases/download/${{ github.ref_name }}/r-trce-windows-all.zip) | Unzip and double-click `install.bat` or `start_studio.bat` |
-            | **Linux (All Distros)** | [`r-trce-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE/releases/download/${{ github.ref_name }}/r-trce-linux-all.tar.gz) | Extract and run `./install.sh` |
-            | **macOS** | [`r-trce-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE/releases/download/${{ github.ref_name }}/r-trce-macos-all.tar.gz) | Extract and run `./install.sh` |
+            | **Windows 10 & 11** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-windows-all.zip) | Unzip and double-click `install.bat` or `start_studio.bat` |
+            | **Linux (All Distros)** | [`rtrce-code-assistant-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-linux-all.tar.gz) | Extract and run `./install.sh` |
+            | **macOS** | [`rtrce-code-assistant-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-macos-all.tar.gz) | Extract and run `./install.sh` |

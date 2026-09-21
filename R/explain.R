@@ -1,12 +1,12 @@
 # =============================================================================
-# R/explain.R -- R-TRCE Architectural Explainer & Exporter
+# R/explain.R -- R-TRCE Code Assistant Architectural Explainer & Exporter
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # /**
 #  * @trce-id trce-rparse-008
-#  * @trce-who R-TRCE Engine / Architectural Explainer
+#  * @trce-who R-TRCE Code Assistant Engine / Architectural Explainer
 #  * @trce-what Generates plain-text and Markdown architectural explanations and TRCE context mappings for R files
 #  * @trce-where R/explain.R -> explain_r_file() & format_markdown_explanation()
 #  * @trce-when Invoked during CLI 'explain', 'export-traces', or in the Shiny studio
@@ -37,12 +37,21 @@ explain_r_file <- function(parsed_obj, analysis, validation = NULL) {
   )
 }
 
+# /**
+#  * @trce-id trce-explain-001
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes format_text_explanation(parsed_obj, analysis, validation) to handle utility_function operations
+#  * @trce-where explain.R -> format_text_explanation | Upstream: explain_r_file | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (parsed_obj, analysis, validation); mutates parent environment state via '<<-'; operates self-contained
+#  */
 format_text_explanation <- function(parsed_obj, analysis, validation) {
   sb <- character(0)
   p <- function(...) sb <<- c(sb, sprintf(...))
 
   p("================================================================================")
-  p("  R-TRCE ARCHITECTURAL EXPLANATION: %s", parsed_obj$file_name)
+  p("  R-TRCE Code Assistant ARCHITECTURAL EXPLANATION: %s", parsed_obj$file_name)
   p("================================================================================")
   p("  Archetype:     %s", analysis$file_type)
   p("  Total Lines:   %d lines", parsed_obj$total_lines)
@@ -96,6 +105,15 @@ format_text_explanation <- function(parsed_obj, analysis, validation) {
   paste(sb, collapse = "\n")
 }
 
+# /**
+#  * @trce-id trce-explain-002
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes format_markdown_explanation(parsed_obj, analysis, validation) to handle utility_function operations
+#  * @trce-where explain.R -> format_markdown_explanation | Upstream: explain_r_file | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (parsed_obj, analysis, validation); mutates parent environment state via '<<-'; operates self-contained
+#  */
 format_markdown_explanation <- function(parsed_obj, analysis, validation) {
   sb <- character(0)
   p <- function(...) sb <<- c(sb, sprintf(...))
@@ -176,6 +194,15 @@ format_markdown_explanation <- function(parsed_obj, analysis, validation) {
 }
 
 # Export TRCE trace entries into JSON format compatible with TRCE state.json
+# /**
+#  * @trce-id trce-explain-003
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes export_trace_json(validation_list) to handle utility_function operations
+#  * @trce-where explain.R -> export_trace_json | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (validation_list); enforces preconditions via stop()/stopifnot(); operates self-contained
+#  */
 export_trace_json <- function(validation_list) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
     stop("Package 'jsonlite' is required for JSON export: install.packages('jsonlite')", call. = FALSE)

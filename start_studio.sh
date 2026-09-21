@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# start_studio.sh -- Launcher for R-TRCE Interactive Studio
+# start_studio.sh -- Launcher for R-TRCE Code Assistant Interactive Studio
 # =============================================================================
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
@@ -8,16 +8,34 @@
 # =============================================================================
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-R_BIN="/home/sam/.r-env/bin/Rscript"
+# Locate Rscript without assuming any particular machine layout:
+#   1. an explicit R_ENV / RTRCE_R_HOME override
+#   2. a user-local ~/.r-env
+#   3. whatever is on PATH
+R_BIN=""
+for candidate in \
+  "${R_ENV:+$R_ENV/bin/Rscript}" \
+  "${RTRCE_R_HOME:+$RTRCE_R_HOME/bin/Rscript}" \
+  "$HOME/.r-env/bin/Rscript"
+do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    R_BIN="$candidate"
+    break
+  fi
+done
 
-if [ ! -x "$R_BIN" ]; then
-  R_BIN="$(which Rscript 2>/dev/null)"
+# `command -v` is a shell builtin and is available where `which` may not be.
+if [ -z "$R_BIN" ] && command -v Rscript >/dev/null 2>&1; then
+  R_BIN="$(command -v Rscript)"
 fi
 
 if [ -z "$R_BIN" ]; then
-  echo "Error: Rscript not found. Please install R or activate ~/.r-env." >&2
+  echo "Error: Rscript not found." >&2
+  echo "  Install R from https://cran.r-project.org, or set R_ENV to your R install." >&2
   exit 1
 fi
+
+echo "Using R: $R_BIN"
 
 export PORT="${PORT:-8083}"
 export HOST="${HOST:-0.0.0.0}"
@@ -29,7 +47,7 @@ if command -v hostname >/dev/null 2>&1; then
 fi
 
 echo "=================================================================="
-echo "  Starting R-TRCE Studio & Guided Walkthrough"
+echo "  Starting R-TRCE Code Assistant Studio & Guided Walkthrough"
 echo "=================================================================="
 echo "  Listening on: http://${HOST}:${PORT}"
 echo ""

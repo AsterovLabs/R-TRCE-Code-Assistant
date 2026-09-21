@@ -1,17 +1,17 @@
 # =============================================================================
-# R/pedagogy.R -- R-TRCE Pedagogical & Student Tutor Subsystem
+# R/pedagogy.R -- R-TRCE Code Assistant Pedagogical & Student Tutor Subsystem
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # /**
 #  * @trce-id trce-rparse-013
-#  * @trce-who R-TRCE Engine / Pedagogical & Educational Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Pedagogical & Educational Subsystem
 #  * @trce-what Deconstructs R ASTs into beginner-friendly explanations, audits student pitfalls, visualizes pipelines/formulas, and synthesizes quizzes
 #  * @trce-where R/pedagogy.R -> detect_student_pitfalls(), deconstruct_pipes(), deconstruct_formulas(), generate_student_explanation(), generate_student_quiz()
 #  * @trce-when Invoked via CLI 'tutor', 'pitfalls', 'quiz' subcommands, or the Student Studio tab in app.R
 #  * @trce-why Bridges the gap between raw R syntax and conceptual mental models for students learning R
-#  * @trce-how Traverses AST expressions for idiomatic antipatterns, decomposes native/magrittr pipes, parses statistical formulas, and contextualizes code with the 6-point TRCE inquiry rubric
+#  * @trce-how Traverses AST expressions for idiomatic antipatterns (skipping comment lines so documentation is never reported as a defect), decomposes native/magrittr pipes, parses statistical formulas, and contextualizes code with the 6-point TRCE inquiry rubric
 #  */
 
 # -----------------------------------------------------------------------------
@@ -35,8 +35,14 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
     )
   }
 
+  # The checks below scan source text with regexes, so comment lines must be
+  # excluded: teaching notes such as "# never write 1:length(x)" are not defects,
+  # and a stray brace inside a comment would corrupt the loop-tracking heuristic.
+  is_code_line <- !grepl("^\\s*#", raw_lines)
+
   # 1. 1:length(x) or 1:nrow(x) trap (when empty, produces 1:0 which runs 2 iterations!)
   for (i in seq_along(raw_lines)) {
+    if (!is_code_line[i]) next
     ln <- raw_lines[i]
     if (grepl("1\\s*:\\s*length\\s*\\(", ln)) {
       add_pitfall(
@@ -63,6 +69,7 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
 
   # 2. as.numeric(factor) trap (converts to integer levels rather than values)
   for (i in seq_along(raw_lines)) {
+    if (!is_code_line[i]) next
     ln <- raw_lines[i]
     if (grepl("as\\.numeric\\s*\\(\\s*[a-zA-Z0-9_$.]+\\s*\\)", ln) && !grepl("as\\.character", ln)) {
       if (grepl("factor", ln, ignore.case = TRUE) || grepl("levels", ln, ignore.case = TRUE)) {
@@ -81,6 +88,7 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
 
   # 3. == NA comparison trap (NA == NA evaluates to NA, not TRUE!)
   for (i in seq_along(raw_lines)) {
+    if (!is_code_line[i]) next
     ln <- raw_lines[i]
     if (grepl("==\\s*NA\\b", ln) || grepl("!=\\s*NA\\b", ln)) {
       add_pitfall(
@@ -99,6 +107,7 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
   in_loop <- FALSE
   brace_depth <- 0
   for (i in seq_along(raw_lines)) {
+    if (!is_code_line[i]) next
     ln <- raw_lines[i]
     if (grepl("\\b(for|while)\\s*\\(", ln)) {
       in_loop <- TRUE
@@ -124,6 +133,7 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
 
   # 5. attach() and setwd() inside scripts/functions
   for (i in seq_along(raw_lines)) {
+    if (!is_code_line[i]) next
     ln <- raw_lines[i]
     if (grepl("\\battach\\s*\\(", ln)) {
       add_pitfall(
@@ -184,6 +194,15 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
 # 2. Data Pipeline Deconstructor (|>, %>%)
 # -----------------------------------------------------------------------------
 
+# /**
+#  * @trce-id trce-pedagogy-001
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes deconstruct_pipes(parsed_obj) to handle utility_function operations
+#  * @trce-where pedagogy.R -> deconstruct_pipes | Upstream: generate_student_explanation | Downstream: describe_pipe_verb
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (parsed_obj); invokes local routines [describe_pipe_verb]
+#  */
 deconstruct_pipes <- function(parsed_obj) {
   raw_lines <- parsed_obj$raw_lines
   ast <- parsed_obj$parsed_ast
@@ -295,6 +314,15 @@ deconstruct_pipes <- function(parsed_obj) {
   pipelines
 }
 
+# /**
+#  * @trce-id trce-pedagogy-002
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes describe_pipe_verb(fn_name, args) to handle utility_function operations
+#  * @trce-where pedagogy.R -> describe_pipe_verb | Upstream: deconstruct_pipes | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (fn_name, args); operates self-contained
+#  */
 describe_pipe_verb <- function(fn_name, args) {
   arg_summary <- if (length(args) > 0) paste(args, collapse = ", ") else ""
   switch(fn_name,
@@ -319,6 +347,15 @@ describe_pipe_verb <- function(fn_name, args) {
 # 3. Formula & Statistical Model Deconstructor
 # -----------------------------------------------------------------------------
 
+# /**
+#  * @trce-id trce-pedagogy-003
+#  * @trce-who Statistical Estimation Engine / ANOVA Decomposer
+#  * @trce-what Executes deconstruct_formulas(parsed_obj) to handle statistical_model operations
+#  * @trce-where pedagogy.R -> deconstruct_formulas | Upstream: generate_student_explanation | Downstream: analyze_single_formula
+#  * @trce-when During analysis execution phase after data tables are validated and joined
+#  * @trce-why Extracts rigorous parameter estimates, standard errors, and confidence intervals
+#  * @trce-how Accepts parameters (parsed_obj); invokes local routines [analyze_single_formula]
+#  */
 deconstruct_formulas <- function(parsed_obj) {
   formulas <- list()
 
@@ -358,6 +395,15 @@ deconstruct_formulas <- function(parsed_obj) {
   formulas
 }
 
+# /**
+#  * @trce-id trce-pedagogy-004
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes analyze_single_formula(node, parent_fn) to handle utility_function operations
+#  * @trce-where pedagogy.R -> analyze_single_formula | Upstream: deconstruct_formulas | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (node, parent_fn); operates self-contained
+#  */
 analyze_single_formula <- function(node, parent_fn) {
   formula_text <- paste(deparse(node), collapse = " ")
   
@@ -385,6 +431,15 @@ analyze_single_formula <- function(node, parent_fn) {
 # 4. Package Primer & Concept Explanations
 # -----------------------------------------------------------------------------
 
+# /**
+#  * @trce-id trce-pedagogy-005
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes package_primer(packages) to handle utility_function operations
+#  * @trce-where pedagogy.R -> package_primer | Upstream: generate_student_explanation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (packages); operates self-contained
+#  */
 package_primer <- function(packages) {
   primer <- list(
     "ggplot2" = list(name = "ggplot2", domain = "Data Visualization", role = "Implements Leland Wilkinson's 'Grammar of Graphics'. Composes charts in independent layers: data + aesthetic mappings (aes) + geometric shapes (geom_*) + scales."),
@@ -414,6 +469,15 @@ package_primer <- function(packages) {
 # 5. Full Student Walkthrough Generator
 # -----------------------------------------------------------------------------
 
+# /**
+#  * @trce-id trce-pedagogy-006
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes generate_student_explanation(parsed_obj, analysis) to handle utility_function operations
+#  * @trce-where pedagogy.R -> generate_student_explanation | Upstream: Top-level invocation or external callers | Downstream: detect_student_pitfalls, deconstruct_pipes, deconstruct_formulas, package_primer
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (parsed_obj, analysis); mutates parent environment state via '<<-'; invokes local routines [detect_student_pitfalls, deconstruct_pipes, deconstruct_formulas, package_primer]
+#  */
 generate_student_explanation <- function(parsed_obj, analysis) {
   pitfalls  <- detect_student_pitfalls(parsed_obj, analysis)
   pipelines <- deconstruct_pipes(parsed_obj)
@@ -424,7 +488,7 @@ generate_student_explanation <- function(parsed_obj, analysis) {
   p <- function(...) sb <<- c(sb, sprintf(...))
 
   p("================================================================================")
-  p("  R-TRCE STUDENT TUTOR & CONCEPT WALKTHROUGH: %s", parsed_obj$file_name)
+  p("  R-TRCE Code Assistant STUDENT TUTOR & CONCEPT WALKTHROUGH: %s", parsed_obj$file_name)
   p("================================================================================")
   p("  File Archetype: %s", analysis$file_type)
   p("  Lines of Code:  %d lines", parsed_obj$total_lines)
@@ -513,6 +577,15 @@ generate_student_explanation <- function(parsed_obj, analysis) {
 # 6. Self-Study Comprehension Quiz Generator
 # -----------------------------------------------------------------------------
 
+# /**
+#  * @trce-id trce-pedagogy-007
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes generate_student_quiz(parsed_obj, analysis) to handle utility_function operations
+#  * @trce-where pedagogy.R -> generate_student_quiz | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (parsed_obj, analysis); mutates parent environment state via '<<-'; operates self-contained
+#  */
 generate_student_quiz <- function(parsed_obj, analysis) {
   questions <- list()
   funcs <- analysis$defined_functions
@@ -587,7 +660,7 @@ generate_student_quiz <- function(parsed_obj, analysis) {
   # Question 4: Architectural Archetype
   questions[[length(questions) + 1L]] <- list(
     id = "q4_archetype",
-    question = sprintf("According to R-TRCE analysis, what architectural role does '%s' serve?", parsed_obj$file_name),
+    question = sprintf("According to R-TRCE Code Assistant analysis, what architectural role does '%s' serve?", parsed_obj$file_name),
     options = c(
       sprintf("(A) %s", analysis$file_type),
       "(B) Low-level C++ foreign function interface (Rcpp)",

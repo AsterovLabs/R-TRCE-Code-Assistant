@@ -1,12 +1,12 @@
 # =============================================================================
-# R/annotator.R -- R-TRCE Annotation Synthesizer
+# R/annotator.R -- R-TRCE Code Assistant Annotation Synthesizer
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # /**
 #  * @trce-id trce-rparse-005
-#  * @trce-who R-TRCE Engine / Annotation Synthesizer
+#  * @trce-who R-TRCE Code Assistant Engine / Annotation Synthesizer
 #  * @trce-what Synthesizes complete 6-point TRCE annotations tailored to R architectural archetypes
 #  * @trce-where R/annotator.R -> generate_annotation() & generate_file_header()
 #  * @trce-when Called during the annotation generation workflow for un-annotated or refreshed code blocks
@@ -29,6 +29,15 @@ generate_annotation <- function(comp, file_rel_path, trace_id, style = c("jsdoc"
 }
 
 # Generate a file-level module header TRCE annotation
+# /**
+#  * @trce-id trce-annotator-001
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes generate_file_header(analysis, file_rel_path, trace_id, style) to handle utility_function operations
+#  * @trce-where annotator.R -> generate_file_header | Upstream: inject_annotations | Downstream: format_trce_block
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (analysis, file_rel_path, trace_id, style); invokes local routines [format_trce_block]
+#  */
 generate_file_header <- function(analysis, file_rel_path, trace_id, style = c("jsdoc", "roxygen")) {
   style <- match.arg(style)
 
@@ -47,6 +56,15 @@ generate_file_header <- function(analysis, file_rel_path, trace_id, style = c("j
 }
 
 # Determine @trce-who based on archetype
+# /**
+#  * @trce-id trce-annotator-002
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes determine_who(comp) to handle utility_function operations
+#  * @trce-where annotator.R -> determine_who | Upstream: generate_annotation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comp); operates self-contained
+#  */
 determine_who <- function(comp) {
   if (comp$kind == "shiny_ui") return("Frontend User Interface / Web Browser Client")
   if (comp$kind == "shiny_app") return("Shiny Application Runtime / Server Process")
@@ -68,6 +86,15 @@ determine_who <- function(comp) {
 }
 
 # Determine @trce-what
+# /**
+#  * @trce-id trce-annotator-003
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes determine_what(comp) to handle utility_function operations
+#  * @trce-where annotator.R -> determine_what | Upstream: generate_annotation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comp); operates self-contained
+#  */
 determine_what <- function(comp) {
   if (comp$kind == "shiny_ui") {
     return(sprintf("Declares responsive Shiny user interface layout (%s) with interactive control widgets and output displays", comp$ui_type))
@@ -110,12 +137,21 @@ determine_what <- function(comp) {
 }
 
 # Determine @trce-where
+# /**
+#  * @trce-id trce-annotator-004
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes determine_where(comp, file_rel_path) to handle utility_function operations
+#  * @trce-where annotator.R -> determine_where | Upstream: generate_annotation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comp, file_rel_path); operates self-contained
+#  */
 determine_where <- function(comp, file_rel_path) {
   name_part <- if (nzchar(comp$name)) paste0(" -> ", comp$name) else ""
   base_where <- paste0(file_rel_path, name_part)
 
   upstream <- if (!is.null(comp$called_by) && length(comp$called_by) > 0) {
-    paste("Upstream: ", paste(comp$called_by, collapse = ", "))
+    paste0("Upstream: ", paste(comp$called_by, collapse = ", "))
   } else if (comp$is_cli_runner) {
     "Upstream: Command-line invocation"
   } else {
@@ -123,7 +159,7 @@ determine_where <- function(comp, file_rel_path) {
   }
 
   downstream <- if (!is.null(comp$calls_local) && length(comp$calls_local) > 0) {
-    paste("Downstream: ", paste(comp$calls_local, collapse = ", "))
+    paste0("Downstream: ", paste(comp$calls_local, collapse = ", "))
   } else {
     "Downstream: Leaf node / standard library"
   }
@@ -132,6 +168,15 @@ determine_where <- function(comp, file_rel_path) {
 }
 
 # Determine @trce-when
+# /**
+#  * @trce-id trce-annotator-005
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes determine_when(comp) to handle utility_function operations
+#  * @trce-where annotator.R -> determine_when | Upstream: generate_annotation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comp); operates self-contained
+#  */
 determine_when <- function(comp) {
   if (comp$kind == "shiny_ui") return("At application startup and client browser DOM initialization")
   if (comp$kind == "shiny_app") return("When the R script is launched as a web service")
@@ -153,6 +198,15 @@ determine_when <- function(comp) {
 }
 
 # Determine @trce-why
+# /**
+#  * @trce-id trce-annotator-006
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes determine_why(comp) to handle utility_function operations
+#  * @trce-where annotator.R -> determine_why | Upstream: generate_annotation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comp); operates self-contained
+#  */
 determine_why <- function(comp) {
   if (comp$kind == "shiny_ui") return("Provides an intuitive, reactive user interface for exploratory data analysis")
   if (comp$kind == "shiny_app") return("Binds reactive UI and computational server logic into an active web dashboard")
@@ -194,6 +248,15 @@ determine_why <- function(comp) {
 }
 
 # Determine @trce-how
+# /**
+#  * @trce-id trce-annotator-007
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes determine_how(comp) to handle utility_function operations
+#  * @trce-where annotator.R -> determine_how | Upstream: generate_annotation | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (comp); mutates parent environment state via '<<-'; operates self-contained
+#  */
 determine_how <- function(comp) {
   if (comp$kind == "shiny_ui") {
     return("Assembles HTML layouts, navigation panels, interactive input widgets, and output placeholders")
@@ -228,13 +291,24 @@ determine_how <- function(comp) {
     }
     parts <- c(parts, callees)
 
-    return(paste(parts, collapse = "; "))
+    # Clauses are lower-case so they read correctly when joined; capitalise the
+    # first letter so a single-clause result is still a proper sentence.
+    return(sub("^([a-z])", "\\U\\1", paste(parts, collapse = "; "), perl = TRUE))
   }
 
   "Assigns values directly in the module environment"
 }
 
 # Format into standardized comment block
+# /**
+#  * @trce-id trce-annotator-008
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes format_trce_block(id, who, what, where, when, why, how, style) to handle utility_function operations
+#  * @trce-where annotator.R -> format_trce_block | Upstream: generate_annotation, generate_file_header | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (id, who, what, where, when, why, how, style); operates self-contained
+#  */
 format_trce_block <- function(id, who, what, where, when, why, how, style = "jsdoc") {
   if (style == "roxygen") {
     return(sprintf(
@@ -264,7 +338,7 @@ format_trce_block <- function(id, who, what, where, when, why, how, style = "jsd
 
 # /**
 #  * @trce-id trce-rparse-006
-#  * @trce-who R-TRCE Engine / Code Injection Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Code Injection Subsystem
 #  * @trce-what Injects generated TRCE annotation blocks into R source code preserving syntax and formatting
 #  * @trce-where R/annotator.R -> inject_annotations()
 #  * @trce-when Invoked when applying annotations via CLI 'annotate' or Shiny Studio export
@@ -280,12 +354,17 @@ inject_annotations <- function(parsed_obj, analysis, prefix = "trce-r",
   components <- analysis$components
   rel_path <- parsed_obj$file_name
 
-  counter <- 1
+  # Start the counter above the highest trace ID already present. Without this a
+  # partly annotated file (e.g. produced by an interrupted Studio walkthrough)
+  # receives a duplicate ID and 'check' fails with an ID clash.
+  counter <- max_existing_trace_number(raw_lines, prefix) + 1L
   modifications <- list()
 
   # 1. Check file header
   if (add_file_header) {
-    has_header_trce <- any(grepl("@trce-id", head(raw_lines, 25)))
+    # Scan the whole leading comment banner, not just the first 25 lines: files
+    # with a licence header push the TRCE header past that window.
+    has_header_trce <- any(grepl("@trce-id", leading_banner_lines(raw_lines)))
     if (!has_header_trce) {
       header_id <- sprintf("%s-%03d", prefix, counter)
       counter <- counter + 1
@@ -309,10 +388,9 @@ inject_annotations <- function(parsed_obj, analysis, prefix = "trce-r",
     # Skip if already has TRCE annotation
     if (!is.null(comp$existing_trce)) next
     
-    # Only annotate significant blocks: functions, Shiny UI/server, schemas, CLI entrypoints
-    should_annotate <- comp$kind %in% c("function", "shiny_ui", "shiny_server", "schema_definition") ||
-                       isTRUE(comp$is_cli_runner)
-    if (!should_annotate) next
+    # Only annotate significant blocks: functions, Shiny UI/server, schemas, CLI entrypoints.
+    # The rule lives in R/common.R so the CLI, validator and Studio cannot drift apart.
+    if (!is_annotatable_component(comp)) next
 
     trace_id <- sprintf("%s-%03d", prefix, counter)
     counter <- counter + 1
@@ -361,6 +439,15 @@ inject_annotations <- function(parsed_obj, analysis, prefix = "trce-r",
 }
 
 # Inject a single custom annotation block at a given line number
+# /**
+#  * @trce-id trce-annotator-009
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes inject_single_block(raw_lines, target_line, annotation_text) to handle utility_function operations
+#  * @trce-where annotator.R -> inject_single_block | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (raw_lines, target_line, annotation_text); operates self-contained
+#  */
 inject_single_block <- function(raw_lines, target_line, annotation_text) {
   block_lines <- strsplit(annotation_text, "\n")[[1]]
   if (target_line <= 1) {

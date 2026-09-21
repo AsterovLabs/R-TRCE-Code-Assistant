@@ -1,12 +1,12 @@
 # =============================================================================
-# R/parser.R -- R-TRCE Core AST Parser
+# R/parser.R -- R-TRCE Code Assistant Core AST Parser
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # /**
 #  * @trce-id trce-rparse-001
-#  * @trce-who R-TRCE Engine / Parser Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Parser Subsystem
 #  * @trce-what Parses R source files into concrete syntax trees and token coordinates using base R AST tools
 #  * @trce-where R/parser.R -> parse_r_file()
 #  * @trce-when Invoked during the initial ingestion phase of any CLI subcommand or Shiny analysis
@@ -20,10 +20,20 @@ parse_r_file <- function(file_path) {
     stop(sprintf("File does not exist: '%s'", file_path), call. = FALSE)
   }
 
-  raw_lines <- readLines(file_path, warn = FALSE)
+  # Encoding-tolerant read: legacy cp1252 / Latin-1 files (common from Windows
+  # editors) are re-encoded here instead of blowing up later with
+  # "input string 1 is invalid UTF-8", which used to blank the Studio.
+  source_text <- read_source_lines(file_path)
+  raw_lines <- source_text$lines
 
+  # When the bytes were re-encoded we must parse the converted text; parsing the
+  # original file would hand the same invalid bytes to the R parser.
   parsed_ast <- tryCatch(
-    parse(file = file_path, keep.source = TRUE),
+    if (source_text$converted) {
+      parse(text = raw_lines, keep.source = TRUE)
+    } else {
+      parse(file = file_path, keep.source = TRUE)
+    },
     error = function(e) {
       stop(sprintf("Syntax error while parsing '%s': %s", file_path, e$message), call. = FALSE)
     }
@@ -42,6 +52,7 @@ parse_r_file <- function(file_path) {
     file_name = basename(file_path),
     raw_lines = raw_lines,
     total_lines = length(raw_lines),
+    encoding_converted = source_text$converted,
     parsed_ast = parsed_ast,
     parse_data = parse_data,
     comments = comments,
@@ -51,7 +62,7 @@ parse_r_file <- function(file_path) {
 
 # /**
 #  * @trce-id trce-rparse-002
-#  * @trce-who R-TRCE Engine / Lexical Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Lexical Subsystem
 #  * @trce-what Extracts comment blocks and associates them with subsequent code expressions
 #  * @trce-where R/parser.R -> extract_comments() & associate_comments()
 #  * @trce-when Executed immediately after getParseData() returns lexical tokens
@@ -101,7 +112,7 @@ extract_comments <- function(parse_data, raw_lines) {
 
 # /**
 #  * @trce-id trce-rparse-012
-#  * @trce-who R-TRCE Engine / Parser Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Parser Subsystem
 #  * @trce-what Maps AST expressions to line boundaries and associates preceding comment scaffolding
 #  * @trce-where R/parser.R -> extract_top_expressions()
 #  * @trce-when Invoked during AST traversal by parse_r_file()

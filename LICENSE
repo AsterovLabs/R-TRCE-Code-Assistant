@@ -59,17 +59,17 @@ license agreement.
    Asterov Labs encourages the use of this Software in educational settings.
    The following uses are explicitly permitted under this license:
 
-   (a) Teachers and instructors may use R-TRCE as a teaching aid in classroom
+   (a) Teachers and instructors may use R-TRCE Code Assistant as a teaching aid in classroom
        settings, provided the Software is not redistributed to students outside
        of the officially supported installation methods (GitHub repository and
        official release channels).
 
-   (b) Students may use R-TRCE to analyze and learn from their own R code, and
-       may include R-TRCE output (annotations, explanations, quizzes) in
+   (b) Students may use R-TRCE Code Assistant to analyze and learn from their own R code, and
+       may include R-TRCE Code Assistant output (annotations, explanations, quizzes) in
        coursework submissions with proper attribution to Asterov Labs.
 
-   (c) Academic researchers may use R-TRCE for non-commercial research purposes
-       and may reference R-TRCE in academic publications with proper citation.
+   (c) Academic researchers may use R-TRCE Code Assistant for non-commercial research purposes
+       and may reference R-TRCE Code Assistant in academic publications with proper citation.
 
 4. CONTRIBUTIONS
 
@@ -87,11 +87,11 @@ license agreement.
    any rights to patents, copyrights, trade secrets, trademarks, or any other
    rights with respect to the Software, except as expressly set forth herein.
 
-   The name "Asterov Labs", the Asterov Labs logo, "R-TRCE", and all related
+   The name "Asterov Labs", the Asterov Labs logo, "R-TRCE Code Assistant", and all related
    names, logos, product and service names, designs, and slogans are trademarks
    of Asterov Labs. You may not use such marks without the prior written
    permission of Asterov Labs, except as required for reasonable and customary
-   use in describing the origin of the Software (e.g., "Powered by R-TRCE by
+   use in describing the origin of the Software (e.g., "Powered by R-TRCE Code Assistant by
    Asterov Labs").
 
 6. NO WARRANTY
@@ -143,4 +143,4 @@ license agreement.
 ================================================================================
 
                     Copyright (c) 2026 Asterov Labs. All Rights Reserved.
-                    R-TRCE is a trademark of Asterov Labs.
+                    R-TRCE Code Assistant is a trademark of Asterov Labs.

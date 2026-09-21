@@ -1,12 +1,12 @@
 # =============================================================================
-# R/validator.R -- R-TRCE Trace Validator
+# R/validator.R -- R-TRCE Code Assistant Trace Validator
 # Copyright (c) 2026 Asterov Labs. All Rights Reserved.
 # Licensed under the Asterov Labs Proprietary Software License.
 # See LICENSE file in the project root for full license terms.
 # =============================================================================
 # /**
 #  * @trce-id trce-rparse-007
-#  * @trce-who R-TRCE Engine / Validator Subsystem
+#  * @trce-who R-TRCE Code Assistant Engine / Validator Subsystem
 #  * @trce-what Validates TRCE annotations for canonical pattern compliance, 6-field completeness, and coverage
 #  * @trce-where R/validator.R -> validate_r_annotations()
 #  * @trce-when Invoked during CLI 'check', test suites, or pre-commit verification
@@ -14,9 +14,19 @@
 #  * @trce-how Scans lines for @trce-* patterns, verifies regex match with ^trce-[a-z0-9-]+-[0-9]+$, and audits completeness
 #  */
 
-TRACE_ID_REGEX <- "^trce-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]+$"
+# TRACE_ID_REGEX (the canonical pattern) lives in R/common.R so the validator,
+# the analyzer and the ID extractors all share one definition.
 REQUIRED_FIELDS <- c("id", "who", "what", "where", "when", "why", "how")
 
+# /**
+#  * @trce-id trce-validator-001
+#  * @trce-who Data Ingestion & Integrity Pipeline / Snowflake Manager
+#  * @trce-what Executes validate_r_annotations(file_path, parsed_obj, analysis) to handle data_pipeline operations
+#  * @trce-where validator.R -> validate_r_annotations | Upstream: Top-level invocation or external callers | Downstream: extract_all_trce_blocks
+#  * @trce-when During data ingestion, integrity validation, or snowflake flattening phases
+#  * @trce-why Ensures reliable, defensive data processing and referential integrity
+#  * @trce-how Accepts parameters (file_path, parsed_obj, analysis); invokes local routines [extract_all_trce_blocks]
+#  */
 validate_r_annotations <- function(file_path, parsed_obj = NULL, analysis = NULL) {
   if (is.null(parsed_obj)) {
     parsed_obj <- parse_r_file(file_path)
@@ -43,7 +53,7 @@ validate_r_annotations <- function(file_path, parsed_obj = NULL, analysis = NULL
         id = id,
         line = e$line,
         severity = "ERROR",
-        message = sprintf("Invalid @trce-id format '%s'. Must match ^trce-[a-z0-9-]+-[0-9]+$", id)
+        message = sprintf("Invalid @trce-id format '%s'. Must match %s", id, TRACE_ID_REGEX)
       )
     }
 
@@ -78,13 +88,9 @@ validate_r_annotations <- function(file_path, parsed_obj = NULL, analysis = NULL
     }
   }
 
-  # Calculate coverage against annotatable components
-  annotatable_components <- list()
-  for (comp in analysis$components) {
-    if (comp$kind %in% c("function", "shiny_ui", "shiny_server", "schema_definition") || isTRUE(comp$is_cli_runner)) {
-      annotatable_components[[length(annotatable_components) + 1L]] <- comp
-    }
-  }
+  # Calculate coverage against annotatable components.
+  # The rule itself lives in R/common.R so the CLI, Studio and annotator agree.
+  annotatable_components <- select_annotatable_components(analysis$components)
 
   total_targets <- length(annotatable_components)
   annotated_targets <- 0
@@ -116,6 +122,15 @@ validate_r_annotations <- function(file_path, parsed_obj = NULL, analysis = NULL
 }
 
 # Extract all TRCE annotation blocks from raw lines
+# /**
+#  * @trce-id trce-validator-002
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Executes extract_all_trce_blocks(raw_lines) to handle utility_function operations
+#  * @trce-where validator.R -> extract_all_trce_blocks | Upstream: validate_r_annotations | Downstream: Leaf node / standard library
+#  * @trce-when Synchronously upon invocation by upstream caller
+#  * @trce-why Modularizes reusable computation and encapsulates domain logic
+#  * @trce-how Accepts parameters (raw_lines); operates self-contained
+#  */
 extract_all_trce_blocks <- function(raw_lines) {
   entries <- list()
   current <- NULL
@@ -148,8 +163,10 @@ extract_all_trce_blocks <- function(raw_lines) {
       match <- regmatches(line, regexec(regex_id, line))[[1]]
       id_val <- if (length(match) >= 2) trimws(match[2]) else ""
 
-      # Skip placeholder or template IDs like trce-core-XXX or %s
-      if (!grepl("^trce-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]+$", id_val)) {
+      # Skip placeholder/template IDs such as trce-core-XXX or trce-demo-%s.
+      # `current` was already flushed above, so the block is simply ignored
+      # rather than being merged into the previous annotation.
+      if (!grepl(TRACE_ID_REGEX, id_val)) {
         next
       }
       
