@@ -17,6 +17,7 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 | Trace Validator | `R/validator.R` | Audits pattern compliance (`^trce-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]+$`), 6-field completeness, and coverage |
 | Explainer & Exporter | `R/explain.R` | Generates plain text/Markdown architectural narratives and TRCE JSON export |
 | Pedagogical Subsystem | `R/pedagogy.R` | Student tutor, pitfall sentinel, pipe/formula deconstruction & comprehension quizzes |
+| **Live Session Runtime** | **`R/runtime.R`** | **Shiny-free R session: evaluates submitted code, captures console output/messages/warnings/errors, reports workspace objects, and stores plots. Drives both the Studio console and `rtrce run`.** |
 | Bundled Examples | `samples/` | Five example scripts: one per detected archetype plus a deliberate "student traps" file that exercises all nine pitfall detectors |
 | Automated Test Suite | `tests/test_r_trce.R` | Functional verification across synthetic cases, the bundled samples, and the real-world R Test corpus |
 
@@ -35,6 +36,7 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 8. **This repository is 100% self-covered.** `tests/test_r_trce.R` asserts that every source file reports 100% coverage and that every in-source trace ID is indexed in `Context.md` and globally unique. If you add a component, run `rtrce annotate <file> --inplace --no-header --prefix trce-<module>` and update `Context.md` in the same commit.
 9. **Never report a pattern found inside a comment.** The Pitfall Sentinel and the ID extractors skip comment lines; keep it that way so teaching notes are never flagged as defects.
 10. **One dependency manifest.** `required_packages()`, `optional_packages()` and `missing_packages()` in `R/common.R` are the only definitions. `rtrce doctor`, `install.sh` and `install.ps1` read them instead of carrying private lists, and `tests/test_r_trce.R` fails if either installer hard-codes a package list again. Add a package by editing that manifest, never by editing an installer.
+11. **The session engine is Shiny-free.** `R/runtime.R` must never `library(shiny)` or reach into reactive state. The Studio console and `rtrce run` both call `session_evaluate()`, so a behaviour change in one is a behaviour change in the other — and the test suite can verify it without a browser.
 
 
 ---
@@ -82,6 +84,7 @@ the same arguments with `Rscript r_trce.R`.
 | Command | Description |
 |---------|-------------|
 | `rtrce parse <file>` | Parse R code AST and display identified components |
+| `rtrce run <file> [--timeout S] [--wd DIR]` | Run the file in a live session and print the console transcript, workspace and plots |
 | `rtrce explain <file> [--md]` | Output architectural explanation and dependency breakdown |
 | `rtrce tutor <file>` | Student-friendly walkthrough, concept decoder & pitfall audit |
 | `rtrce pitfalls <file>` | Audit code for common beginner traps and memory bottlenecks |

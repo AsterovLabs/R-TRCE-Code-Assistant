@@ -41,6 +41,7 @@ source(file.path(script_dir, "R", "annotator.R"))
 source(file.path(script_dir, "R", "validator.R"))
 source(file.path(script_dir, "R", "explain.R"))
 source(file.path(script_dir, "R", "pedagogy.R"))
+source(file.path(script_dir, "R", "runtime.R"))
 
 # /**
 #  * @trce-id trce-cli-001
@@ -68,7 +69,8 @@ COMMANDS
   ANALYSE  (read-only: nothing on disk is changed)
     parse <file>                    List the components found in the file
     explain <file> [--md]           Full architecture write-up plus the call graph
-    doctor                          Check that R, shiny and jsonlite are installed
+    run <file> [options]            Run the file in a live session and print the transcript
+    doctor                          Check the R version and every package the tool needs
 
   ANNOTATE & AUDIT
     annotate <file> [options]       Write @trce-* blocks into the file
@@ -90,10 +92,17 @@ ANNOTATE OPTIONS
   --style STYLE                   Comment style: 'jsdoc' (default) or 'roxygen'
   --no-header                     Skip generating the file-level module header
 
+RUN OPTIONS
+  --timeout SECONDS               Per-expression budget before a runaway loop is stopped (default: 10)
+  --wd DIR                        Working directory for the run, so relative paths resolve like a normal session
+
 EXAMPLES
   # First time here? Check your environment, then read a file:
   Rscript r_trce.R doctor
   Rscript r_trce.R explain path/to/script.R
+
+  # See what the code actually does when it runs:
+  Rscript r_trce.R run path/to/script.R
 
   # Studying? Start with the guided walkthrough:
   Rscript r_trce.R tutor path/to/script.R
@@ -131,7 +140,7 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 
   # Validate the command before touching the filesystem: a typo should be
   # reported as a typo, not as a missing file.
-  known_commands <- c("parse", "explain", "tutor", "pitfalls", "quiz", "annotate",
+  known_commands <- c("parse", "explain", "run", "tutor", "pitfalls", "quiz", "annotate",
                       "check", "export-traces", "export_traces", "studio", "doctor")
   if (!cmd %in% known_commands) {
     cat(sprintf("Unknown command: '%s'\n\n", cmd), file = stderr())
@@ -211,6 +220,72 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
         cat(exp$text, "\n")
       }
       cat(sprintf("\nNext: Rscript r_trce.R annotate \"%s\"   (add @trce-* documentation)\n", target_file))
+    },
+
+    # Execute the file in a real session and show what happened, expression by
+    # expression. This is the headless twin of the Studio console, and it drives
+    # the same engine (R/runtime.R) so the two can never diverge.
+    run = {
+      timeout_val <- 10
+      to_idx <- which(options_args %in% c("--timeout", "-t"))
+      if (length(to_idx) > 0 && length(options_args) >= to_idx + 1) {
+        parsed_timeout <- suppressWarnings(as.numeric(options_args[to_idx + 1]))
+        if (!is.na(parsed_timeout) && parsed_timeout > 0) timeout_val <- parsed_timeout
+      }
+
+      wd_val <- NULL
+      wd_idx <- which(options_args %in% c("--wd", "-w"))
+      if (length(wd_idx) > 0 && length(options_args) >= wd_idx + 1) {
+        wd_val <- options_args[wd_idx + 1]
+      }
+
+      session <- new_r_session(timeout = timeout_val)
+      if (!is.null(wd_val)) session_set_wd(session, wd_val)
+
+      cat("================================================================================\n")
+      cat(sprintf("  RUNNING: %s\n", basename(target_file)))
+      cat(sprintf("  Working directory: %s\n", session$wd))
+      cat("================================================================================\n")
+
+      code <- paste(read_source_lines(target_file)$lines, collapse = "\n")
+      result <- session_evaluate(session, code)
+
+      for (entry in result$entries) {
+        cat(sprintf("> %s\n", entry$code))
+        for (line in format_console_entry(entry)) {
+          cat(sprintf("  %s\n", line))
+        }
+      }
+
+      if (length(result$entries) == 0) {
+        cat("(The file defines things but runs nothing at the top level,\n")
+        cat(" so there is no output yet. Try: rtrce explain on it instead.)\n")
+      }
+
+      cat("--------------------------------------------------------------------------------\n")
+      objects <- result$workspace
+      if (nrow(objects) == 0) {
+        cat("  Workspace after the run: empty\n")
+      } else {
+        cat(sprintf("  Workspace after the run (%d object(s)):\n", nrow(objects)))
+        for (i in seq_len(nrow(objects))) {
+          cat(sprintf("    %-18s %-12s %s\n", objects$name[i], objects$class[i], objects$preview[i]))
+        }
+      }
+      if (length(result$plots) > 0) {
+        cat(sprintf("  Plots drawn: %d (saved under %s)\n", length(result$plots), session$plot_dir))
+      }
+      cat("--------------------------------------------------------------------------------\n")
+
+      if (!result$ok) {
+        cat("  The run stopped at the first error, exactly as the console would.\n")
+        cat(sprintf("  %d expression(s) completed before it.\n", length(result$entries) - 1L))
+        cat("\n")
+        quit(status = 1)
+      }
+
+      cat("  Run completed without errors.\n")
+      cat(sprintf("\nNext: Rscript r_trce.R explain \"%s\"   (what all of that was for)\n", target_file))
     },
 
     tutor = {

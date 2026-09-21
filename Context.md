@@ -25,7 +25,8 @@ R-TRCE Code Assistant/
 │   ├── annotator.R         # TRCE 6-point annotation generator and code injector
 │   ├── validator.R         # Trace integrity and coverage auditing
 │   ├── explain.R           # Plain text/Markdown explanation and JSON export
-│   └── pedagogy.R          # Student tutor, pitfall sentinel, pipe/formula deconstruction & quizzes
+│   ├── pedagogy.R          # Student tutor, pitfall sentinel, pipe/formula deconstruction & quizzes
+│   └── runtime.R           # Live R session: evaluation, console capture, workspace and plots
 └── tests/
     └── test_r_trce.R       # Automated test suite running against synthetic and real R scripts
 
@@ -61,6 +62,7 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-rparse-012` | R-TRCE Code Assistant Engine / Parser Subsystem | Maps AST expressions to line boundaries and associates preceding comment scaffolding | `R/parser.R` (`extract_top_expressions`) |
 | `trce-rparse-013` | R-TRCE Code Assistant Engine / Pedagogical & Educational Subsystem | Deconstructs R ASTs into beginner-friendly explanations, audits student pitfalls, visualizes pipelines/formulas, and synthesizes quizzes | `R/pedagogy.R` (`detect_student_pitfalls`, `deconstruct_pipes`, `deconstruct_formulas`, `generate_student_explanation`, `generate_student_quiz`) |
 | `trce-rparse-014` | R-TRCE Code Assistant Engine / Shared Infrastructure | Provides the canonical shared helpers used by every entry point: `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest, and encoding-tolerant source reading | `R/common.R` (`%||%`, `get_script_dir`, `is_annotatable_component`, `select_annotatable_components`, `max_existing_trace_number`, `read_source_lines`, `required_packages`, `missing_packages`) |
+| `trce-rparse-015` | R-TRCE Code Assistant Engine / Live Session Runtime | Evaluates user-submitted R code in a persistent environment and captures the console transcript, value types, warnings, errors and rendered plots | `R/runtime.R` (`new_r_session`, `session_evaluate`, `evaluate_with_capture`) |
 
 ### 2.2 Component-level Trace Index
 
@@ -111,7 +113,17 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-pedagogy-004` | `analyze_single_formula()` | utility_function | `R/pedagogy.R` (L407-L428) |
 | `trce-pedagogy-005` | `package_primer()` | utility_function | `R/pedagogy.R` (L443-L466) |
 | `trce-pedagogy-006` | `generate_student_explanation()` | utility_function | `R/pedagogy.R` (L481-L574) |
-| `trce-pedagogy-007` | `generate_student_quiz()` | utility_function | `R/pedagogy.R` (L589-L675) | 
+| `trce-pedagogy-007` | `generate_student_quiz()` | utility_function | `R/pedagogy.R` (L589-L675) |
+| `trce-runtime-001` | `new_r_session()` | utility_function | `R/runtime.R` (L101-L119) |
+| `trce-runtime-002` | `session_is_incomplete()` | utility_function | `R/runtime.R` (L194-L205) |
+| `trce-runtime-003` | `preview_value()` | utility_function | `R/runtime.R` (L217-L234) |
+| `trce-runtime-004` | `session_workspace()` | data_pipeline | `R/runtime.R` (L247-L269) |
+| `trce-runtime-005` | `evaluate_with_capture()` | data_pipeline | `R/runtime.R` (L291-L399) |
+| `trce-runtime-006` | `session_evaluate()` | data_pipeline | `R/runtime.R` (L417-L485) |
+| `trce-runtime-007` | `session_set_wd()` | utility_function | `R/runtime.R` (L161-L174) |
+| `trce-runtime-008` | `session_reset()` | utility_function | `R/runtime.R` (L132-L144) |
+| `trce-runtime-009` | `format_console_entry()` | utility_function | `R/runtime.R` (L498-L509) |
+| `trce-runtime-010` | `install_quit_guard()` | utility_function | `R/runtime.R` (L64-L80) | 
 
 Coverage is 100% of annotatable components in every source file, verified by
 `rtrce check <file>` and asserted by `tests/test_r_trce.R`.

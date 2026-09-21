@@ -35,6 +35,7 @@ source(file.path(root_dir, "R", "annotator.R"))
 source(file.path(root_dir, "R", "validator.R"))
 source(file.path(root_dir, "R", "explain.R"))
 source(file.path(root_dir, "R", "pedagogy.R"))
+source(file.path(root_dir, "R", "runtime.R"))
 
 # Test harness helpers
 pass_count <- 0
@@ -419,13 +420,141 @@ if (dir.exists(samples_dir)) {
 }
 
 # ------------------------------------------------------------------------------
-# Test 10: Repository self-coverage, trace index and dependency-manifest integrity
+# Test 10: Live session runtime (R/runtime.R)
 # ------------------------------------------------------------------------------
-cat("\n--- 10. Testing Repository Self-Coverage, Trace Index & Dependency Manifest ---\n")
+cat("\n--- 10. Testing Live Session Runtime (R/runtime.R) ---\n")
+
+rt <- new_r_session()
+assert("new_r_session() starts empty and is not the global environment",
+       nrow(session_workspace(rt)) == 0 && !identical(rt$env, globalenv()))
+
+rt_math <- session_evaluate(rt, "1 + 1")
+assert("session_evaluate() prints the value a console would show",
+       any(grepl("[1] 2", rt_math$entries[[1]]$output, fixed = TRUE)))
+assert("session_evaluate() reports the visible value's class and length",
+       identical(rt_math$entries[[1]]$value_class, "numeric") &&
+       rt_math$entries[[1]]$value_length == 1)
+
+rt_assign <- session_evaluate(rt, "answer <- 42")
+assert("An assignment is silent, exactly as it is in a console",
+       length(rt_assign$entries[[1]]$output) == 0)
+assert("The assigned object appears in the workspace",
+       "answer" %in% session_workspace(rt)$name)
+
+rt_cat <- session_evaluate(rt, "cat('printed')")
+assert("cat() output is captured",
+       any(grepl("printed", rt_cat$entries[[1]]$output)))
+assert("output written without a trailing newline is not dropped",
+       any(grepl("no-newline-here", session_evaluate(rt, "cat('no-newline-here')")$entries[[1]]$output)))
+
+# A hosted session must not be killable from inside: sample 04_cli_tool.R ends a
+# branch with quit(), which would otherwise take the whole Studio process down.
+rt_quit <- session_evaluate(rt, "quit()")
+assert("quit() is blocked inside a hosted session",
+       !rt_quit$ok && grepl("blocked", rt_quit$entries[[1]]$error))
+assert("q() is blocked as well",
+       !session_evaluate(rt, "q()")$ok)
+assert("the session survives a blocked quit attempt",
+       session_evaluate(rt, "'still running'")$ok)
+
+# Printing a Shiny app object starts a server. One bundled sample ends with
+# shinyApp(ui, server), so this must be reported rather than executed.
+rt_app <- session_evaluate(rt, "structure(list(), class = 'shiny.appobj')")
+assert("printing a Shiny app object is refused with an explanation",
+       length(rt_app$entries[[1]]$output) == 0 &&
+       any(grepl("Shiny app object", rt_app$entries[[1]]$messages)))
+
+rt_cond <- session_evaluate(rt, "message('m1'); warning('w1'); 7")
+assert("messages are captured separately from warnings",
+       length(rt_cond$entries[[1]]$messages) == 1 && "m1" %in% rt_cond$entries[[1]]$messages)
+assert("warnings are captured", "w1" %in% rt_cond$entries[[2]]$warnings)
+
+rt_err <- session_evaluate(rt, "stop('boom')")
+assert("an error is reported instead of thrown at the caller",
+       !rt_err$ok && identical(rt_err$entries[[1]]$error, "boom"))
+assert("the session survives an error", session_evaluate(rt, "'alive'")$ok)
+
+rt_syntax <- session_evaluate(rt, "x <- )")
+assert("a syntax error is quoted and the session keeps working",
+       !rt_syntax$ok && grepl("unexpected", rt_syntax$entries[[1]]$error) &&
+       session_evaluate(rt, "1 + 1")$ok)
+
+rt_incomplete <- session_evaluate(rt, "f <- function(a,")
+assert("incomplete input is flagged rather than reported as an error",
+       rt_incomplete$incomplete && rt_incomplete$ok)
+assert("incomplete input is not written to history",
+       !any(endsWith(rt$history, "function(a,")))
+
+rt_multi <- session_evaluate(rt, c("b <- 1", "b * 21"))
+assert("multiple expressions run in order",
+       length(rt_multi$entries) == 2 &&
+       any(grepl("[1] 21", rt_multi$entries[[2]]$output, fixed = TRUE)))
+
+# `first_step` / `later_step` rather than `c` / `d`: assigning to `c` would shadow
+# base c() inside the session and quietly break the assertions that follow.
+after_error <- session_evaluate(rt, c("first_step <- 1", "stop('second')", "later_step <- 2"))
+assert("a failed block stops there, keeping what already ran",
+       length(after_error$entries) == 2 && !("later_step" %in% session_workspace(rt)$name))
+
+assert("sink() is always released, so later captures still work", sink.number() == 0)
+
+# Plots: a device that was drawn on is captured; an untouched one must not be
+# presented as a plot.
+rt_plain <- session_evaluate(rt, "1 + 1")
+assert("an expression that draws nothing produces no plot", length(rt_plain$plots) == 0)
+rt_plot <- session_evaluate(rt, "plot(1:10)")
+if (isTRUE(capabilities("png"))) {
+  assert("a real plot is captured as a non-empty PNG file",
+         length(rt_plot$plots) == 1 && file.exists(rt_plot$plots[[1]]$file) &&
+         file.info(rt_plot$plots[[1]]$file)$size > 0)
+} else {
+  cat("  [SKIP] This R build has no PNG device\n")
+}
+
+# Workspace previews are what make an environment pane worth looking at.
+session_evaluate(rt, "helper_fn <- function(a, b) a + b")
+session_evaluate(rt, "frame <- data.frame(k = 1:3, v = c('a', 'b', 'c'))")
+ws <- session_workspace(rt)
+assert("workspace summarises a function by its parameters",
+       ws$preview[ws$name == "helper_fn"] == "function(a, b)")
+assert("workspace summarises a data frame by its shape",
+       ws$preview[ws$name == "frame"] == "3 rows x 2 cols")
+
+# Runaway code must be stopped, and must not take the sink with it.
+rt_slow <- new_r_session(timeout = 1)
+started <- Sys.time()
+rt_timeout <- session_evaluate(rt_slow, "for (i in 1:1e9) i")
+elapsed <- as.numeric(difftime(Sys.time(), started, units = "secs"))
+assert("a runaway loop is interrupted by the time limit",
+       !rt_timeout$ok && grepl("elapsed time limit", rt_timeout$entries[[1]]$error))
+assert("the interruption is prompt (well under 10s)", elapsed < 10)
+assert("sink() survives the interruption", sink.number() == 0)
+assert("the session still works after a timeout", session_evaluate(rt_slow, "'ok'")$ok)
+
+rt_wd <- session_set_wd(rt, tempdir(), change_process = FALSE)
+assert("session_set_wd() validates and stores the directory",
+       identical(rt_wd, normalizePath(tempdir())))
+assert("session_set_wd() rejects a directory that does not exist",
+       inherits(tryCatch(session_set_wd(rt, "/no/such/place", change_process = FALSE),
+                         error = function(e) e), "error"))
+
+session_reset(rt)
+assert("session_reset() empties the workspace, history and plots",
+       nrow(session_workspace(rt)) == 0 && length(rt$history) == 0 && length(rt$plots) == 0)
+
+assert("format_console_entry() orders output, messages, warnings and the error",
+       identical(format_console_entry(list(output = "out", messages = "msg",
+                                           warnings = "warn", error = "err")),
+                 c("out", "msg", "Warning: warn", "Error: err")))
+
+# ------------------------------------------------------------------------------
+# Test 11: Repository self-coverage, trace index and dependency-manifest integrity
+# ------------------------------------------------------------------------------
+cat("\n--- 11. Testing Repository Self-Coverage, Trace Index & Dependency Manifest ---\n")
 
 self_files <- c(
   "r_trce.R", "app.R", "R/common.R", "R/parser.R", "R/analyzer.R",
-  "R/annotator.R", "R/validator.R", "R/explain.R", "R/pedagogy.R",
+  "R/annotator.R", "R/validator.R", "R/explain.R", "R/pedagogy.R", "R/runtime.R",
   "tests/test_r_trce.R"
 )
 
