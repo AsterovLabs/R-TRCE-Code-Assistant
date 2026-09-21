@@ -10,7 +10,7 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 |-----------|----------|---------|
 | CLI Entrypoint | `r_trce.R` | Subcommand router (`parse`, `explain`, `tutor`, `pitfalls`, `quiz`, `annotate`, `check`, `export-traces`, `studio`, `doctor`) |
 | Interactive Studio | `app.R` | Shiny webapp for visual AST inspection, dependency graphs, and live annotation |
-| **Shared Helpers** | **`R/common.R`** | **Sourced first by every entry point. Owns `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, and encoding-tolerant file reading. Never duplicate any of these elsewhere.** |
+| **Shared Helpers** | **`R/common.R`** | **Sourced first by every entry point. Owns `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest (`required_packages()`, `optional_packages()`, `missing_packages()`) and encoding-tolerant file reading. Never duplicate any of these elsewhere.** |
 | Core AST Parser | `R/parser.R` | AST extraction, token mapping, and comment association using base R `parse()` & `getParseData()` |
 | Semantic Analyzer | `R/analyzer.R` | Archetype detection (Shiny UI/server, snowflake schemas, ANOVA models, CLI runners), call graph |
 | Annotation Synthesizer | `R/annotator.R` | 6-point TRCE metadata formulation and non-destructive code injection engine |
@@ -34,6 +34,7 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 7. **Two trace-ID namespaces.** `trce-rparse-NNN` is the frozen module-level namespace (§2.1 of `Context.md`) and must never be renumbered. Component-level blocks use one namespace per module, `trce-<module>-NNN`, which keeps IDs unique repository-wide. When annotating a source file of this project, pass `--prefix trce-<module> --no-header`.
 8. **This repository is 100% self-covered.** `tests/test_r_trce.R` asserts that every source file reports 100% coverage and that every in-source trace ID is indexed in `Context.md` and globally unique. If you add a component, run `rtrce annotate <file> --inplace --no-header --prefix trce-<module>` and update `Context.md` in the same commit.
 9. **Never report a pattern found inside a comment.** The Pitfall Sentinel and the ID extractors skip comment lines; keep it that way so teaching notes are never flagged as defects.
+10. **One dependency manifest.** `required_packages()`, `optional_packages()` and `missing_packages()` in `R/common.R` are the only definitions. `rtrce doctor`, `install.sh` and `install.ps1` read them instead of carrying private lists, and `tests/test_r_trce.R` fails if either installer hard-codes a package list again. Add a package by editing that manifest, never by editing an installer.
 
 
 ---

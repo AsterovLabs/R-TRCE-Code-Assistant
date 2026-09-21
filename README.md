@@ -100,7 +100,12 @@ R version >= 4.0.0 is required. If using the Asterov user environment:
 Rscript --version
 ```
 
-Dependencies (`jsonlite`, `shiny`, `DT`) are pre-installed in `~/.r-env`.
+The tool needs two R packages: **`jsonlite`** (JSON trace export) and **`shiny`** (the Studio).
+They are declared once, in `required_packages()` in
+[`R/common.R`](R/common.R), and `rtrce doctor` plus both installers read that manifest — so the
+three of them can never disagree about what "required" means. **`DT`** is listed as *optional*
+by `optional_packages()`: when it is present the Studio renders richer tables, and when it is
+absent it falls back to R's built-in tables. The Asterov `~/.r-env` ships all three.
 
 ---
 
@@ -115,7 +120,7 @@ from a checkout, use `Rscript r_trce.R` instead — both take identical argument
 | :--- | :--- |
 | `rtrce parse <file>` | Lists the components found in the file |
 | `rtrce explain <file> [--md]` | Full architecture write-up plus the call graph |
-| `rtrce doctor` | Checks R version, `shiny` and `jsonlite` are present |
+| `rtrce doctor` | Checks the R version and every package in the dependency manifest |
 
 **Annotate & audit:**
 

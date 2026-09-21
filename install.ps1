@@ -190,10 +190,14 @@ if (-not (Test-Path "$InstallDir\r_trce.R")) {
 
 # 3. Verify and Install Missing R Packages
 if ($rscriptBin -and ($rscriptBin -ne "Rscript.exe" -or (Get-Command $rscriptBin -ErrorAction SilentlyContinue))) {
-    Write-Host "Checking required R packages (jsonlite, shiny)..." -NoNewline
+    Write-Host "Checking required R packages (manifest: R/common.R)..." -NoNewline
     try {
-        $checkScript = "pkgs <- c('jsonlite', 'shiny'); missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]; cat(paste(missing, collapse=' '))"
+        # The list lives in required_packages() in R/common.R, so this installer,
+        # install.sh and `rtrce doctor` all agree on what is required.
+        $env:RTRCE_HOME = $InstallDir
+        $checkScript = "source(file.path(Sys.getenv('RTRCE_HOME'), 'R', 'common.R')); cat(paste(missing_packages(), collapse=' '))"
         $missingPkgs = & "$rscriptBin" -e "$checkScript" 2>$null
+        Remove-Item Env:\RTRCE_HOME -ErrorAction SilentlyContinue
         
         if (-not $missingPkgs -or $missingPkgs -eq "") {
             Write-Host " All installed!" -ForegroundColor Green
@@ -203,7 +207,7 @@ if ($rscriptBin -and ($rscriptBin -ne "Rscript.exe" -or (Get-Command $rscriptBin
             try {
                 & "$rscriptBin" -e "install.packages(strsplit('$missingPkgs', ' ')[[1]], repos='https://cloud.r-project.org', quiet=TRUE)"
             } catch {
-                Write-Host "[!] Warning: Auto-install failed. Run install.packages(c('jsonlite', 'shiny')) inside R." -ForegroundColor Yellow
+                Write-Host "[!] Warning: Auto-install failed. Run install.packages(required_packages()) inside R (the list is in R/common.R)." -ForegroundColor Yellow
             }
         }
     } catch {

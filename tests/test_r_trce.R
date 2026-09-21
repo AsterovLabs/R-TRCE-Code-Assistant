@@ -284,6 +284,20 @@ assert("leading_banner_lines() stops at the first line of code",
 assert("leading_banner_lines() returns nothing for a code-first file",
        length(leading_banner_lines(c("x <- 1", "y <- 2"))) == 0)
 
+# The dependency manifest (R/common.R section 6) is the single list the doctor
+# and both installers read, so its two categories must stay meaningful.
+assert("required_packages() names the packages the tool cannot run without",
+       setequal(required_packages(), c("jsonlite", "shiny")))
+assert("optional_packages() never overlaps required_packages()",
+       length(intersect(required_packages(), optional_packages())) == 0)
+assert("missing_packages() reports nothing for an installed base package",
+       length(missing_packages("stats")) == 0)
+assert("missing_packages() reports a package that does not exist",
+       identical(missing_packages("rtrce.package.that.does.not.exist"),
+                 "rtrce.package.that.does.not.exist"))
+assert("missing_packages() returns nothing for an empty request",
+       length(missing_packages(character(0))) == 0)
+
 # ------------------------------------------------------------------------------
 # Test 8: Regression tests for previously failing behaviours
 # ------------------------------------------------------------------------------
@@ -405,9 +419,9 @@ if (dir.exists(samples_dir)) {
 }
 
 # ------------------------------------------------------------------------------
-# Test 10: Repository self-coverage and trace-index integrity
+# Test 10: Repository self-coverage, trace index and dependency-manifest integrity
 # ------------------------------------------------------------------------------
-cat("\n--- 10. Testing Repository Self-Coverage & Trace Index ---\n")
+cat("\n--- 10. Testing Repository Self-Coverage, Trace Index & Dependency Manifest ---\n")
 
 self_files <- c(
   "r_trce.R", "app.R", "R/common.R", "R/parser.R", "R/analyzer.R",
@@ -458,6 +472,28 @@ if (file.exists(context_path)) {
          length(setdiff(src_ids, ctx_ids)) == 0)
 } else {
   cat("  [SKIP] Context.md not found\n")
+}
+
+# The installers and the doctor must read the dependency manifest rather than
+# carry their own copy. This is the check that would have caught README.md
+# documenting DT as a dependency while no installer ever installed it.
+manifest_roots <- c("install.sh", "install.ps1")
+manifest_ok <- vapply(manifest_roots, function(f) {
+  path <- file.path(root_dir, f)
+  if (!file.exists(path)) return(TRUE)        # partial checkout: nothing to guard
+  txt   <- paste(readLines(path, warn = FALSE), collapse = "\n")
+  uses  <- grepl("missing_packages()", txt, fixed = TRUE)
+  stale <- grepl("'jsonlite', 'shiny'", txt, fixed = TRUE) ||
+           grepl('"jsonlite", "shiny"', txt, fixed = TRUE)
+  uses && !stale
+}, logical(1))
+assert("install.sh and install.ps1 read the dependency manifest from R/common.R",
+       all(manifest_ok))
+
+readme_path <- file.path(root_dir, "README.md")
+if (file.exists(readme_path)) {
+  assert("README.md names required_packages() as the dependency authority",
+         any(grepl("required_packages()", readLines(readme_path, warn = FALSE), fixed = TRUE)))
 }
 
 # ------------------------------------------------------------------------------

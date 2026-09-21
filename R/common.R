@@ -263,3 +263,60 @@ read_source_lines <- function(file_path) {
 
   list(lines = fixed_lines, converted = TRUE)
 }
+
+# -----------------------------------------------------------------------------
+# 6. Dependency manifest
+# -----------------------------------------------------------------------------
+# The single list of R packages this project needs. `rtrce doctor`, install.sh
+# and install.ps1 all read it from here instead of carrying their own copy, so a
+# package can no longer be required by one consumer and forgotten by another.
+# That drift is not hypothetical: README.md documented DT as a dependency while
+# no installer ever installed it, and the doctor checked jsonlite and shiny by
+# name with no shared definition behind them.
+
+# Packages the tool cannot work without: jsonlite powers 'export-traces', shiny
+# powers the Studio ('studio' and the doctor's own self-test page).
+# /**
+#  * @trce-id trce-common-010
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Returns the canonical list of R packages this project cannot run without
+#  * @trce-where common.R -> required_packages | Upstream: run_doctor(), install.sh, install.ps1 | Downstream: missing_packages
+#  * @trce-when Read during environment diagnostics and installer setup
+#  * @trce-why Gives the doctor and both installers one source of truth, so a package cannot be required in one place and skipped in another
+#  * @trce-how Returns a fixed character vector that consumers diff against missing_packages()
+#  */
+required_packages <- function() {
+  c("jsonlite", "shiny")
+}
+
+# Packages that make the Studio better but are never required: when one is
+# absent the Studio falls back to a plainer rendering instead of failing.
+# /**
+#  * @trce-id trce-common-011
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Returns the list of optional R packages that enhance the Studio but are never required
+#  * @trce-where common.R -> optional_packages | Upstream: run_doctor(), app.R | Downstream: missing_packages
+#  * @trce-when Read during environment diagnostics and Studio startup
+#  * @trce-why Keeps optional extras documented and distinguishable from hard requirements, so a missing DT degrades the UI instead of blocking it
+#  * @trce-how Returns a fixed character vector disjoint from required_packages()
+#  */
+optional_packages <- function() {
+  c("DT")
+}
+
+# Which of these packages are not installed, from the caller's point of view.
+# Quietly: a missing package is an expected answer here, not a warning.
+# /**
+#  * @trce-id trce-common-012
+#  * @trce-who Core Application Logic / Internal Caller
+#  * @trce-what Reports which of the named R packages are unavailable in the current library path
+#  * @trce-where common.R -> missing_packages | Upstream: run_doctor(), installers via Rscript -e | Downstream: Leaf node / standard library
+#  * @trce-when During 'rtrce doctor', installer package verification, and Studio startup feature detection
+#  * @trce-why Replaces the duplicated requireNamespace() checks that had drifted between the doctor and both installers
+#  * @trce-how Applies requireNamespace(quietly = TRUE) across the vector and returns the names that failed, preserving input order
+#  */
+missing_packages <- function(pkgs = required_packages()) {
+  if (length(pkgs) == 0) return(character(0))
+  keep <- !vapply(pkgs, function(p) requireNamespace(p, quietly = TRUE), logical(1))
+  pkgs[keep]
+}

@@ -392,21 +392,27 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 
 # /**
 #  * @trce-id trce-cli-002
-#  * @trce-who Core Application Logic / Internal Caller
-#  * @trce-what Executes run_doctor(no parameters) to handle utility_function operations
-#  * @trce-where r_trce.R -> run_doctor | Upstream: main | Downstream: Leaf node / standard library
-#  * @trce-when Synchronously upon invocation by upstream caller
-#  * @trce-why Modularizes reusable computation and encapsulates domain logic
-#  * @trce-how Operates self-contained
+#  * @trce-who CLI Operator / Environment Diagnostics
+#  * @trce-what Runs environment diagnostics: R and platform, every package in the dependency manifest, a self-parse of this CLI, and a check that the shared annotatable-component rule loaded
+#  * @trce-where r_trce.R -> run_doctor | Upstream: main | Downstream: required_packages(), optional_packages(), missing_packages() in R/common.R
+#  * @trce-when On `rtrce doctor`, or after install to confirm the environment is usable
+#  * @trce-why Tells the operator exactly which capability is unavailable and why, instead of letting 'export-traces' or the Studio fail later with a confusing error
+#  * @trce-how Diffs the shared manifest against what is installed, prints one line per required and optional package, self-parses r_trce.R with its own parser, and reports overall status
 #  */
 run_doctor <- function() {
   cat("================================================================================\n")
   cat("  R-TRCE CODE ASSISTANT -- HEALTH CHECK & DIAGNOSTICS (doctor)\n")
   cat("================================================================================\n")
 
-  has_json  <- requireNamespace("jsonlite", quietly = TRUE)
-  has_shiny <- requireNamespace("shiny", quietly = TRUE)
-  r_ok      <- getRversion() >= "4.0.0"
+  # The dependency manifest lives in R/common.R, so the doctor, install.sh and
+  # install.ps1 cannot disagree about what this project requires.
+  req         <- required_packages()
+  opt         <- optional_packages()
+  missing_req <- missing_packages(req)
+  missing_opt <- missing_packages(opt)
+  has_json    <- !("jsonlite" %in% missing_req)
+  has_shiny   <- !("shiny" %in% missing_req)
+  r_ok        <- getRversion() >= "4.0.0"
 
   cat(sprintf("  R version:       %s%s\n", R.version.string,
               if (r_ok) "  [supported]" else "  [TOO OLD - 4.0.0+ required]"))
@@ -417,6 +423,13 @@ run_doctor <- function() {
   cat(sprintf("  Web Studio:      %s\n",
               if (has_shiny) "OK (shiny available)" else "MISSING - 'studio' unavailable"))
   cat("  Core modules:    common.R, parser.R, analyzer.R, annotator.R, validator.R, explain.R, pedagogy.R [LOADED]\n")
+  cat(sprintf("  Required:        %s   (manifest: R/common.R)\n", paste(req, collapse = ", ")))
+  if (length(opt) > 0) {
+    cat(sprintf("  Optional:        %s%s\n", paste(opt, collapse = ", "),
+                if (length(missing_opt) == 0) "" else
+                  sprintf("   [absent: %s - the Studio falls back to plain tables]",
+                          paste(missing_opt, collapse = ", "))))
+  }
   cat("--------------------------------------------------------------------------------\n")
   cat("  Running self-tests...\n")
 
@@ -453,13 +466,16 @@ run_doctor <- function() {
   }
 
   cat("--------------------------------------------------------------------------------\n")
-  if (!has_shiny || !has_json) {
-    cat("  Optional packages are missing. Install them with:\n")
-    if (!has_json)  cat("    install.packages('jsonlite')\n")
-    if (!has_shiny) cat("    install.packages('shiny')       # or: sudo apt install r-cran-shiny\n")
+  if (length(missing_req) > 0) {
+    cat("  Required packages are missing, so part of the tool will not run:\n")
+    for (p in missing_req) {
+      cat(sprintf("    install.packages('%s')\n", p))
+    }
+    cat("    # Debian / Ubuntu / Chromebook: sudo apt install -y r-cran-shiny r-cran-jsonlite\n")
     cat("--------------------------------------------------------------------------------\n")
   }
-  cat(sprintf("  Overall status: %s\n", if (healthy && r_ok) "HEALTHY" else "NEEDS ATTENTION"))
+  cat(sprintf("  Overall status: %s\n",
+              if (healthy && r_ok && length(missing_req) == 0) "HEALTHY" else "NEEDS ATTENTION"))
   cat("================================================================================\n")
 }
 

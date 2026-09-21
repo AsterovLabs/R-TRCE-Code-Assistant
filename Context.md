@@ -18,7 +18,8 @@ R-TRCE Code Assistant/
 ├── start_studio.sh / .bat  # Studio launchers
 ├── R/
 │   ├── common.R            # Shared helpers: %||%, or_default(), get_script_dir(), annotatable-component
-│   │                       # rule, trace-ID bookkeeping, encoding-tolerant file reading  [SOURCED FIRST]
+│   │                       # rule, trace-ID bookkeeping, encoding-tolerant file reading, and the
+│   │                       # dependency manifest (required_packages / optional_packages)  [SOURCED FIRST]
 │   ├── parser.R            # Core AST parsing and token extraction
 │   ├── analyzer.R          # Semantic analyzer and archetype recognition
 │   ├── annotator.R         # TRCE 6-point annotation generator and code injector
@@ -59,15 +60,15 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-rparse-011` | Test Suite Runner / CI Verifier | Automated test harness verifying AST parsing, semantic analysis, annotation injection, and trace validation | `tests/test_r_trce.R` (`run_all_tests`) |
 | `trce-rparse-012` | R-TRCE Code Assistant Engine / Parser Subsystem | Maps AST expressions to line boundaries and associates preceding comment scaffolding | `R/parser.R` (`extract_top_expressions`) |
 | `trce-rparse-013` | R-TRCE Code Assistant Engine / Pedagogical & Educational Subsystem | Deconstructs R ASTs into beginner-friendly explanations, audits student pitfalls, visualizes pipelines/formulas, and synthesizes quizzes | `R/pedagogy.R` (`detect_student_pitfalls`, `deconstruct_pipes`, `deconstruct_formulas`, `generate_student_explanation`, `generate_student_quiz`) |
-| `trce-rparse-014` | R-TRCE Code Assistant Engine / Shared Infrastructure | Provides the canonical shared helpers used by every entry point: `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, and encoding-tolerant source reading | `R/common.R` (`%||%`, `get_script_dir`, `is_annotatable_component`, `select_annotatable_components`, `max_existing_trace_number`, `read_source_lines`) |
+| `trce-rparse-014` | R-TRCE Code Assistant Engine / Shared Infrastructure | Provides the canonical shared helpers used by every entry point: `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest, and encoding-tolerant source reading | `R/common.R` (`%||%`, `get_script_dir`, `is_annotatable_component`, `select_annotatable_components`, `max_existing_trace_number`, `read_source_lines`, `required_packages`, `missing_packages`) |
 
 ### 2.2 Component-level Trace Index
 
 | Trace ID | Component | Role | File (lines) |
 |----------|-----------|------|--------------|
 | `trce-cli-001` | `usage()` | cli_dispatcher | `r_trce.R` (L54-L112) |
-| `trce-cli-002` | `run_doctor()` | utility_function | `r_trce.R` (L402-L464) |
-| `trce-cli-003` | `interactive_guard()` | cli_entrypoint | `r_trce.R` (L475-L477) |
+| `trce-cli-002` | `run_doctor()` | utility_function | `r_trce.R` (L402-L480) |
+| `trce-cli-003` | `interactive_guard()` | cli_entrypoint | `r_trce.R` (L491-L493) |
 | `trce-studio-001` | `discover_sample_files()` | utility_function | `app.R` (L114-L135) |
 | `trce-studio-002` | `ui()` | shiny_ui | `app.R` (L180-L343) |
 | `trce-studio-003` | `server()` | shiny_server | `app.R` (L355-L1047) |
@@ -81,6 +82,9 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-common-006` | `leading_banner_lines()` | utility_function | `R/common.R` (L193-L199) |
 | `trce-common-007` | `tidy_source_lines()` | utility_function | `R/common.R` (L216-L218) |
 | `trce-common-008` | `read_source_lines()` | utility_function | `R/common.R` (L239-L265) |
+| `trce-common-010` | `required_packages()` | utility_function | `R/common.R` (L288-L290) |
+| `trce-common-011` | `optional_packages()` | utility_function | `R/common.R` (L303-L305) |
+| `trce-common-012` | `missing_packages()` | utility_function | `R/common.R` (L318-L322) |
 | `trce-analyzer-001` | `classify_expression()` | utility_function | `R/analyzer.R` (L81-L206) |
 | `trce-analyzer-002` | `analyze_function_node()` | statistical_model | `R/analyzer.R` (L218-L275) |
 | `trce-analyzer-003` | `extract_function_calls()` | utility_function | `R/analyzer.R` (L287-L303) |
@@ -163,6 +167,7 @@ Defects fixed in the same pass:
 | A single-clause `@trce-how` began with a lower-case word | `R/annotator.R` | The joined clause list is sentence-cased (`trce-annotator-007`) |
 | Prose mentioning `@trce-id` (e.g. a teaching note) shadowed the real ID in the analyzer | `R/analyzer.R`, `R/common.R` | `parse_existing_trce()` now requires the canonical pattern; `TRACE_ID_REGEX` centralised (`trce-analyzer-005`) |
 | Pitfall Sentinel reported trap patterns that appeared inside comments | `R/pedagogy.R` | Comment lines are excluded from the pattern scans (`trce-rparse-013`) |
+| `DT` was documented as a dependency that no installer ever installed, and the doctor hard-coded the package names it checked | `README.md`, `install.sh`, `install.ps1`, `rtrce doctor` | One manifest — `required_packages()` / `optional_packages()` / `missing_packages()` in `R/common.R` — read by the doctor and both installers, with a test that fails if either installer goes back to a private list (`trce-common-010` … `trce-common-012`) |
 
 ---
 

@@ -198,11 +198,15 @@ fi
 
 # 4. Check & Install Required R Packages (jsonlite, shiny)
 if [ -x "$RSCRIPT_BIN" ] || command -v "$RSCRIPT_BIN" >/dev/null 2>&1; then
-  echo -n "Checking required R packages (jsonlite, shiny)... "
+  echo -n "Checking required R packages (manifest: R/common.R)... "
+  # The list itself lives in required_packages() in R/common.R, so this
+  # installer, install.ps1 and `rtrce doctor` cannot disagree about what
+  # "required" means. RTRCE_HOME already names the install directory, so it is
+  # exported rather than interpolated (that also survives paths with spaces).
+  export RTRCE_HOME="$INSTALL_DIR"
   MISSING_PKGS="$("$RSCRIPT_BIN" -e '
-    pkgs <- c("jsonlite", "shiny")
-    missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
-    cat(paste(missing, collapse = " "))
+    source(file.path(Sys.getenv("RTRCE_HOME"), "R", "common.R"))
+    cat(paste(missing_packages(), collapse = " "))
   ' 2>/dev/null || true)"
 
   if [ -z "$MISSING_PKGS" ]; then
@@ -222,11 +226,10 @@ if [ -x "$RSCRIPT_BIN" ] || command -v "$RSCRIPT_BIN" >/dev/null 2>&1; then
       echo -e "    ${BOLD}sudo apt update && sudo apt install -y r-cran-shiny r-cran-jsonlite${NC}"
     }
 
-    # Verify if installed now
+    # Verify if installed now (same manifest, so this cannot check a stale list)
     RECHECK="$("$RSCRIPT_BIN" -e '
-      pkgs <- c("jsonlite", "shiny")
-      missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
-      cat(paste(missing, collapse = " "))
+      source(file.path(Sys.getenv("RTRCE_HOME"), "R", "common.R"))
+      cat(paste(missing_packages(), collapse = " "))
     ' 2>/dev/null || true)"
     if [ -z "$RECHECK" ]; then
       echo -e "${GREEN}Successfully installed required R packages!${NC}"
