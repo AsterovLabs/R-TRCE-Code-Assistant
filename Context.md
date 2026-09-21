@@ -29,9 +29,13 @@ R-TRCE Code Assistant/
 │   ├── runtime.R           # Live R session: evaluation, console capture, workspace and plots
 │   ├── editor_ops.R        # Editable-document logic: statement at a cursor, line counting, console history
 │   ├── studio_editor.R     # Studio pane: source editor bound to the working document (+ Run / Save)
-│   └── studio_console.R    # Studio pane: interactive console, transcript and session controls
+│   ├── studio_console.R    # Studio pane: interactive console, transcript and session controls
+│   └── studio_panes.R      # Studio panes: Files, Plots, Packages, Help + title bar and status bar chrome
 ├── www/                    # Vendored browser assets served by Shiny
+│   ├── rtrce-theme.css     # The whole visual language: tokens (Catppuccin Mocha/Latte + Asterov gradient), shell, panes
 │   ├── rtrce-editor.js     # CodeMirror <-> Shiny bridge (edit, run, history, gutter hints)
+│   ├── rtrce-layout.js     # IDE shell behaviour: splitters, theme switch, shortcut sheet
+│   ├── brand/              # The Asterov "A" monogram + favicon, copied from the design system
 │   └── codemirror/         # CodeMirror 5.65.16 + R mode + addons (MIT; see its LICENSE)
 └── tests/
     └── test_r_trce.R       # Automated test suite running against synthetic and real R scripts
@@ -72,6 +76,7 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-rparse-016` | R-TRCE Code Assistant Engine / Editor Operations | Resolves the code a "run this" gesture should execute and walks console history, without depending on shiny or the browser | `R/editor_ops.R` (`statement_code_at`, `history_step`, `count_lines`) |
 | `trce-rparse-017` | R-TRCE Code Assistant Studio / Source Editor Pane | Two-way binding between the browser editor and the Studio's working document, plus Run / Run All / Save | `R/studio_editor.R` (`studio_editor_ui`, `studio_editor_server`) |
 | `trce-rparse-018` | R-TRCE Code Assistant Studio / Console Pane | Interactive R console sharing the editor's live session, with command history, transcript and environment reporting | `R/studio_console.R` (`studio_console_ui`, `studio_console_server`) |
+| `trce-rparse-019` | R-TRCE Code Assistant Studio / Workspace Panes | Files, Plots, Packages and Help panes plus the title-bar and status-bar chrome | `R/studio_panes.R` (`studio_files_pane_server`, `studio_plots_pane_server`, `studio_packages_pane_server`, `studio_help_pane_server`, `studio_chrome_server`) |
 
 ### 2.2 Component-level Trace Index
 
@@ -80,13 +85,20 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-cli-001` | `usage()` | cli_dispatcher | `r_trce.R` (L54-L112) |
 | `trce-cli-002` | `run_doctor()` | utility_function | `r_trce.R` (L402-L480) |
 | `trce-cli-003` | `interactive_guard()` | cli_entrypoint | `r_trce.R` (L491-L493) |
-| `trce-studio-001` | `discover_sample_files()` | utility_function | `app.R` (L205-L226) |
-| `trce-studio-002` | `ui()` | shiny_ui | `app.R` (L271-L471) |
-| `trce-studio-003` | `server()` | shiny_server | `app.R` (L483-L1269) |
-| `trce-studio-004` | `interactive_guard()` | cli_entrypoint | `app.R` (L1283-L1336) |
-| `trce-studio-005` | `studio_bind_host()` | utility_function | `app.R` (L115-L124) |
-| `trce-studio-006` | `register_studio_assets()` | utility_function | `app.R` (L145-L152) |
-| `trce-studio-007` | `studio_asset_version()` | utility_function | `app.R` (L172-L181) |
+| `trce-studio-001` | `discover_sample_files()` | utility_function | `app.R` (L206-L227) |
+| `trce-studio-002` | `ui()` | shiny_ui | `app.R` (L272-L518) |
+| `trce-studio-003` | `server()` | shiny_server | `app.R` (L530-L1367) |
+| `trce-studio-004` | `interactive_guard()` | cli_entrypoint | `app.R` (L1381-L1434) |
+| `trce-studio-005` | `studio_bind_host()` | utility_function | `app.R` (L116-L125) |
+| `trce-studio-006` | `register_studio_assets()` | utility_function | `app.R` (L146-L153) |
+| `trce-studio-007` | `studio_asset_version()` | utility_function | `app.R` (L173-L182) |
+| `trce-pane-001` | `studio_files_pane_server()` | shiny_server | `R/studio_panes.R` (L54-L172) |
+| `trce-pane-002` | `studio_row_click()` | utility_function | `R/studio_panes.R` (L189-L192) |
+| `trce-pane-003` | `studio_plots_pane_server()` | shiny_server | `R/studio_panes.R` (L237-L300) |
+| `trce-pane-004` | `studio_packages_pane_server()` | shiny_server | `R/studio_panes.R` (L319-L401) |
+| `trce-pane-005` | `studio_help_pane_server()` | shiny_server | `R/studio_panes.R` (L418-L473) |
+| `trce-pane-006` | `studio_chrome_server()` | shiny_server | `R/studio_panes.R` (L493-L534) |
+| `trce-pane-007` | `human_size()` | utility_function | `R/studio_panes.R` (L208-L218) |
 | `trce-editor-001` | `statement_code_at()` | utility_function | `R/editor_ops.R` (L56-L100) |
 | `trce-editor-002` | `history_step()` | utility_function | `R/editor_ops.R` (L148-L173) |
 | `trce-editor-003` | `count_lines()` | utility_function | `R/editor_ops.R` (L121-L126) |
@@ -247,4 +259,53 @@ from theory:
 | Custom-message handlers in `www/rtrce-editor.js` are registered through one helper | Shiny throws unless a handler takes exactly one argument, and that throw silently disabled every handler registered after it — the run highlight and gutter hints never fired |
 | Assets are served with a `?v=<mtime>` token | A cached `rtrce-editor.js` after an upgrade is indistinguishable from a broken feature (`trce-studio-007`) |
 | `count_lines()` rather than `strsplit()` | R drops a trailing empty field, so the status line disagreed with the editor's gutter by one line (`trce-editor-003`) |
+
+---
+
+## 7. Design Language (Phase 2, recorded)
+
+The Studio follows the Asterov "A" icon. That is a contract, not a preference: this screen is
+the first surface of what may become an agentic-first TRCE IDE, so it should look like Asterov
+before it looks like anything else. The tokens live in `www/rtrce-theme.css` and nowhere else.
+
+| Token group | Values |
+|-------------|--------|
+| Surfaces (dark = Mocha) | `--rt-crust #11111b`, `--rt-mantle #181825`, `--rt-base #1e1e2e`, `--rt-surface-0/1/2` |
+| Surfaces (light = Latte) | `--rt-base #eff1f5` and friends, switched by `[data-rtrce-theme="latte"]` on `<html>` |
+| Accents | mauve `#cba6f7`, blue `#89b4fa`, teal `#94e2d5`, green `#a6e3a1`, yellow `#f9e2af`, peach `#fab387`, red `#f38ba8` |
+| Signature | `--rt-grad: linear-gradient(135deg, #cba6f7, #89b4fa, #94e2d5)` -- the icon's own stroke |
+| Type | Inter (UI), JetBrains Mono (code, numerics, status), Cinzel reserved for the wider suite |
+| Shape | radii 6 / 10 / 16 px, soft glows (`--rt-glow`), gradients only as accents or hairlines |
+
+Rules that follow from it:
+
+1. **Every colour comes from a token.** No literal hex in R or in component CSS; the theme is the
+   only place a colour is named. Both themes are checked for WCAG contrast (body 11.3:1,
+   secondary 7.4:1, accents 7-13:1 on dark).
+2. **The gradient is an accent, never a surface.** It appears on the wordmark, the primary action,
+   a 1px hairline under the title bar, and as a soft wash behind the empty states.
+3. **Teaching surfaces are mauve.** `.rtrce-teach` exists so that an explanation never looks like
+   an error and an error never looks like an explanation.
+4. **The theme stylesheet loads last and is scoped** (`.rtrce-app .CodeMirror`). CodeMirror's own
+   CSS sets an editor background at equal specificity, so a theme that relies on source order
+   alone renders a white editor -- which is what happened before this was fixed.
+5. **Fonts are named, never downloaded.** No CDN, no bundled font files: offline use is a feature.
+6. **Layout metrics are shared with the splitter script.** `--rt-bottom-h` and `--rt-rail-w` are
+   read and written by both `www/rtrce-layout.js` and the R defaults, so a drag cannot disagree
+   with a default.
+
+The panes themselves follow RStudio's mental model, because familiarity is the point: source
+above console on the left, Environment / Files / Plots / Packages / Help in the right rail, the
+editor and console sharing one session, and the analysis views (walkthrough, annotations,
+explanation, AST, student studio) as tabs of the bottom panel rather than replacements for it.
+
+| Piece | What it does | Trace IDs |
+|-------|--------------|-----------|
+| Title bar | Asterov mark, document chip, live session pill, theme switch, shortcut sheet | `trce-rparse-019`, `trce-pane-006` |
+| Status bar | Working directory, cursor line, object and command counts, TRCE coverage, R version | `trce-pane-006` |
+| Files pane | Browse, open text files into the editor, change the session working directory | `trce-pane-001`, `trce-pane-002`, `trce-pane-007` |
+| Plots pane | The newest captured plot, its history, and a full-size link | `trce-pane-003` |
+| Packages pane | What is installed, what this file imports, and what the tool requires | `trce-pane-004` |
+| Help pane | Shortcuts, the six questions, the vocabulary, how the panes fit together | `trce-pane-005` |
+| Splitters, theme, shortcuts | `www/rtrce-layout.js` -- browser-only, remembered in localStorage | -- |
 

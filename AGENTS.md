@@ -14,6 +14,9 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 | Console Pane | `R/studio_console.R` | Interactive R console sharing the editor's session: transcript, history, restart |
 | Editor Operations | `R/editor_ops.R` | The IDE-style decisions kept shiny-free and testable: statement at a cursor, editor line counting, history stepping |
 | Browser Assets | `www/` | Vendored CodeMirror 5.65.16 (MIT) + `rtrce-editor.js`, the Shiny bridge. No CDN, no extra R package |
+| Theme | `www/rtrce-theme.css` | **The only place a colour is named.** Asterov design tokens (Catppuccin Mocha/Latte + the "A" icon's gradient), shell, panes, controls |
+| Rail Panes | `R/studio_panes.R` | Files, Plots, Packages and Help, plus the title-bar document chip and the status bar |
+| Shell Behaviour | `www/rtrce-layout.js` | Splitters, theme switch, editor re-measure, keyboard-shortcut sheet |
 | **Shared Helpers** | **`R/common.R`** | **Sourced first by every entry point. Owns `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest (`required_packages()`, `optional_packages()`, `missing_packages()`) and encoding-tolerant file reading. Never duplicate any of these elsewhere.** |
 | Core AST Parser | `R/parser.R` | AST extraction, token mapping, and comment association using base R `parse()` & `getParseData()` |
 | Semantic Analyzer | `R/analyzer.R` | Archetype detection (Shiny UI/server, snowflake schemas, ANOVA models, CLI runners), call graph |
@@ -44,6 +47,8 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 12. **A hosted session may never kill or block its host.** `R/runtime.R` guards `quit()`/`q()` and refuses to print a `shiny.appobj`. Anything else that could terminate or indefinitely block the Studio process (starting a server, waiting on input) belongs behind the same kind of guard, with an explanation the user can read.
 13. **The Studio binds to localhost by default.** It executes arbitrary R code, so remote access must be explicit (`HOST=...` or `RTRCE_ALLOW_REMOTE=1`) and is announced in the terminal and in a UI banner. Never reinstate a default of `0.0.0.0`.
 14. **Shiny custom-message handlers take exactly one argument.** Shiny throws otherwise, *during registration*, which silently disables every handler registered after it. Register through the `registerHandler()` helper in `www/rtrce-editor.js`, never `Shiny.addCustomMessageHandler()` directly.
+15. **One place names a colour: `www/rtrce-theme.css`.** No literal hex in R or in component markup; add a token instead. The themed stylesheet must also load *after* CodeMirror's and stay scoped (`.rtrce-app .CodeMirror`), because CodeMirror sets an editor background at equal specificity.
+16. **Never read a reactive at module registration time.** `reactiveVal(state$wd())` outside a reactive context makes Shiny abort the whole session ("Operation not allowed without an active reactive context") and every pane silently never paints. Build such values lazily, as `studio_files_pane_server()` does with `navigated`/`current_dir`.
 
 
 ---

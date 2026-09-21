@@ -192,30 +192,47 @@ Launch the visual walkthrough studio:
 Rscript app.R
 ```
 
-Open `http://127.0.0.1:8083` in your browser:
-* **Tab 1: Workspace — edit and run R (new):**
-  - A real code editor: R syntax highlighting, line numbers, bracket matching, auto-indent.
-  - `Ctrl+Enter` runs the line or selection; `Ctrl+Shift+Enter` runs the whole file; `Ctrl+S`
-    saves back to the file you opened; `Ctrl+/` comments a line.
-  - Running a line inside a function runs the **whole statement**, the way RStudio does, and
-    the editor shows exactly which lines ran.
-  - A console sharing the same session: values, `cat()` output, messages, warnings and errors
-    appear the way a terminal shows them, `Up`/`Down` recall history, and plots are captured.
-  - An **Environment** table lists every object with its type, class, size and a preview, so
-    you can watch the workspace change as you work.
-  - Nothing here is a separate sandbox: whatever you type becomes the document that every other
-    tab analyses, annotates and quizzes you on.
-* **Tab 2: Guided Walkthrough ("Walk Me Through It"):**
-  - Drop or select an R script to start a step-by-step interactive inspection.
-  - Review each function, reactive node, and pipeline step one by one.
-  - View syntax-highlighted code snippets, architectural dependencies, and caller/callee graphs.
-  - Inspect, customize, or accept the generated 6-point TRCE annotations (`@trce-*`) as you go.
-  - Actions: `[ Accept & Next ]`, `[ Skip ]`, `[ Previous ]`, `[ Annotate All Immediately ]`.
-  - Progress tracker and celebration screen upon 100% completion.
-* **Tab 3: Annotated Code & Traces:** The annotated working copy, TRCE audit validation badge, and download buttons (`.R` and `.json`).
-* **Tab 4: Architectural Explanation:** View detected archetype, system narratives, and caller-callee dependency matrices.
-* **Tab 5: AST & Parse Tokens:** Raw R AST expression coordinates and lexical token streams.
-* **Tab 6: 🎓 Student Studio:** Pitfall sentinel, concept decoder, pipeline/formula deconstruction, and a self-study quiz.
+Open `http://127.0.0.1:8083` in your browser. The Studio is laid out like an IDE — source above
+console on the left, a rail of workspace panes on the right, a title bar that tells you which
+file you are in and a status bar that tells you where you are:
+
+```
+┌───────────────────────────────────────────────┬─────────────────────────┐
+│ Ⓐ R-TRCE Studio      doc.R · 24 lines   ◐ ?   │                         │
+├───────────────────────────────────────────────┤  Environment  Files     │
+│ SOURCE  (Ctrl+Enter runs the statement)       │  Plots  Packages  Help  │
+│                                               │                         │
+├───────────────────────────────────────────────┤  The panes you work in: │
+│ Console │ Project │ Walkthrough │ Annotated … │  live objects, folders  │
+│ > _                                           │  plots, packages, help  │
+└───────────────────────────────────────────────┴─────────────────────────┘
+   working dir · Ln 12 · 3 objects · TRCE 100% · R 4.5.3
+```
+
+* **Source pane:** R syntax highlighting, line numbers, bracket matching, `Ctrl+Enter` to run the
+  statement at the cursor (the whole statement, as RStudio does), `Ctrl+Shift+Enter` for the file,
+  `Ctrl+S` to save back to the file you opened, `Ctrl+/` to comment.
+* **Console:** shares the session with the editor, so a function you define with `Ctrl+Enter` is
+  available at the prompt and vice versa. `Enter` submits, `Shift+Enter` adds a line, `Up`/`Down`
+  recall history. Values, `cat()` output, messages, warnings and errors each get their own colour.
+* **Environment:** every object with its type, class, size and a value preview, refreshed after
+  each run.
+* **Files:** browse, open a text file straight into the editor, and set the session working
+  directory so `read.csv("data/x.csv")` resolves the way you expect.
+* **Plots:** the newest plot you drew, with its history and a full-size link.
+* **Packages:** what is installed, what this document imports, and what this tool requires.
+* **Help:** shortcuts, the TRCE six questions, and the vocabulary the interface uses.
+* **Bottom panel tabs:** `Project` (open files, annotation settings, batch annotate),
+  `Guided Walkthrough`, `Annotated Code & Traces`, `Architectural Explanation`, `AST & Parse
+  Tokens` and `🎓 Student Studio` — all reading the same document you are editing.
+* **Drag the splitters** to size the panes; double-click one to reset. **`?`** opens the shortcut
+  sheet. **◐** switches between the dark (Mocha) and light (Latte) theme, and remembers your
+  choice.
+
+The look follows the Asterov "A" monogram: Catppuccin surfaces with the mark's
+mauve → blue → teal gradient used as an accent. Every colour lives in
+[`www/rtrce-theme.css`](www/rtrce-theme.css) as a token, in both themes.
+
 
 ### Running code in the browser: what to know
 

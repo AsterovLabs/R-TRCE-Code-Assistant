@@ -96,6 +96,7 @@ source(file.path(script_dir, "R", "runtime.R"))
 source(file.path(script_dir, "R", "editor_ops.R"))
 source(file.path(script_dir, "R", "studio_editor.R"))
 source(file.path(script_dir, "R", "studio_console.R"))
+source(file.path(script_dir, "R", "studio_panes.R"))
 
 # -----------------------------------------------------------------------------
 # Where the Studio listens
@@ -273,121 +274,127 @@ ui <- fluidPage(
   theme = NULL,
 
   tags$head(
-    tags$style(HTML("
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; }
-      .header-bar { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; padding: 22px 32px; margin-bottom: 24px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-      .header-bar h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; }
-      .header-bar p { margin: 6px 0 0; color: #94a3b8; font-size: 14px; }
-      .card { background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-      .badge-success { background: #10b981; color: white; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-      .badge-info { background: #3b82f6; color: white; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-      .badge-warning { background: #f59e0b; color: white; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-      .badge-secondary { background: #64748b; color: white; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-      pre.code-view { background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 6px; font-size: 13px; max-height: 480px; overflow-y: auto; font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace; line-height: 1.5; }
-      .progress-bar-container { background: #e2e8f0; border-radius: 8px; height: 12px; width: 100%; overflow: hidden; margin: 12px 0 18px; }
-      .progress-bar-fill { background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%); height: 100%; transition: width 0.3s ease; }
-      .step-counter { font-size: 14px; font-weight: 600; color: #475569; }
-      .component-title { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-      .btn-walkthrough { margin-right: 8px; font-weight: 600; padding: 8px 16px; }
-      .field-label { font-size: 12px; font-weight: 700; color: #475569; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-      .table { font-size: 13px; }
-    ")),
+    tags$link(rel = "icon", type = "image/svg+xml", href = "rtrce/brand/favicon.svg"),
     # Vendored CodeMirror (MIT, see www/codemirror/LICENSE) so the Studio works
     # offline: no CDN, no network dependency, no third-party R package. The ?v=
     # token busts the browser cache whenever the assets change.
     tags$link(rel = "stylesheet", href = sprintf("rtrce/codemirror/lib/codemirror.css?v=%s", ASSET_VERSION)),
+    # The themed stylesheet is linked LAST, deliberately: CodeMirror's own CSS
+    # sets an editor background, and equal specificity means "last one wins".
+    # Loading the theme first made the editor render white in both themes.
+    tags$link(rel = "stylesheet", href = sprintf("rtrce/rtrce-theme.css?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/lib/codemirror.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/mode/r/r.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/addon/edit/matchbrackets.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/addon/edit/closebrackets.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/addon/comment/comment.js?v=%s", ASSET_VERSION)),
-    tags$script(src = sprintf("rtrce/rtrce-editor.js?v=%s", ASSET_VERSION))
+    tags$script(src = sprintf("rtrce/rtrce-editor.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/rtrce-layout.js?v=%s", ASSET_VERSION))
   ),
 
-  div(class = "header-bar",
-    h1(STUDIO_NAME),
-    p("Drop or select an R file to inspect its architecture, understand every component, and add TRCE annotations as you go."),
-    uiOutput("active_file_badge"),
-    if (REMOTE_ACCESS) {
-      div(style = "margin-top: 10px; background: #7f1d1d; color: #fee2e2; padding: 8px 12px; border-radius: 6px; font-size: 13px;",
-        strong("Remote access is enabled. "),
-        "This page can run R code, so anyone who can reach this address can run code on this machine. ",
-        "Unset HOST / RTRCE_ALLOW_REMOTE to listen on localhost only.")
-    }
-  ),
+  # ===========================================================================
+  # IDE shell
+  # ===========================================================================
+  # Title bar / source pane / bottom panel / right rail / status bar, laid out
+  # with the same custom properties the theme and the splitter script share, so
+  # a drag in the browser and a default in R can never disagree.
+  div(class = "rtrce-app",
 
-  sidebarLayout(
-    sidebarPanel(
-      width = 3,
-      div(class = "card",
-        h4("Source R File"),
-        fileInput("file_upload", "Drop or Upload .R File:", accept = c(".R", ".r"), buttonLabel = "Browse...", placeholder = "No file chosen"),
-        if (length(sample_files) > 0) {
-          selectInput("sample_select", "Or load an example script:",
-                      choices = c("--- Choose sample ---" = "", sample_files),
-                      selected = "")
-        },
-        actionButton("btn_reset_sample", "Reset to Default Sample", class = "btn-default btn-xs", style = "margin-bottom: 15px;"),
-        hr(),
-        h4("Annotation Settings"),
-        textInput("trce_prefix", "Trace ID Prefix:", value = "trce-r"),
-        selectInput("trce_style", "Annotation Style:", choices = c("JSDoc (# /** ... */)" = "jsdoc", "Roxygen (#' ...)" = "roxygen")),
-        checkboxInput("inc_header", "Include File-Level Header", value = TRUE),
-        hr(),
-        h4("Batch Actions"),
-        actionButton("btn_batch_annotate", "Annotate All Immediately", class = "btn-primary btn-block", style = "width: 100%; font-weight: 600;"),
-        p(style = "color: #64748b; font-size: 11px; margin-top: 6px;", "Or use the 'Interactive Walkthrough' tab to step through and approve each component.")
+    # --- Title bar ----------------------------------------------------------
+    tags$header(class = "rtrce-titlebar",
+      div(class = "rtrce-brand",
+        img(class = "rtrce-brand-mark", src = "rtrce/brand/asterov-icon.svg", alt = ""),
+        div(
+          span(class = "rtrce-brand-name", "R-TRCE Studio"),
+          span(class = "rtrce-brand-sub", "Code Assistant")
+        )
       ),
-
-      # Always-visible primer so a first-time user knows what an annotation is.
-      div(class = "card",
-        h4("New to TRCE?"),
-        p(style = "color: #475569; font-size: 12px;",
-          "TRCE describes a piece of code by answering six questions. This tool writes those answers into your file as a comment block."),
-        tags$ul(style = "font-size: 12px; color: #475569; padding-left: 18px; line-height: 1.6; margin-bottom: 8px;",
-          tags$li(strong("WHO "), "runs it? (user, Shiny server, cron job)"),
-          tags$li(strong("WHAT "), "does it mechanically do? (join, filter, model)"),
-          tags$li(strong("WHERE "), "does it sit? (which file, who calls it, what it calls)"),
-          tags$li(strong("WHEN "), "does it fire? (at load, on click, once per row)"),
-          tags$li(strong("WHY "), "does it exist? (the problem it solves)"),
-          tags$li(strong("HOW "), "is it built? (parameters, state changes)")
-        ),
-        p(style = "color: #64748b; font-size: 11px; margin-bottom: 6px;",
-          strong("Coverage %"), " = share of annotatable components (functions, Shiny blocks, schemas, CLI runners) that already carry a block."),
-        p(style = "color: #64748b; font-size: 11px; margin: 0;",
-          strong("Archetypes"), " you may see: data_pipeline, statistical_model, visualization, shiny_server, cli_dispatcher, utility_function.")
+      div(class = "rtrce-titlebar-center",
+        uiOutput("titlebar_doc"),
+        if (REMOTE_ACCESS) {
+          span(class = "rt-chip rt-chip-error", "remote access enabled")
+        }
+      ),
+      div(class = "rtrce-titlebar-actions",
+        span(class = "rtrce-session-pill", span(class = "rtrce-dot"), "session ready"),
+        tags$button(id = "rtrce-theme-toggle", class = "rtrce-icon-btn",
+                    title = "Switch between the dark and light theme",
+                    "◐"),
+        tags$button(id = "rtrce-help-toggle", class = "rtrce-icon-btn",
+                    title = "Keyboard shortcuts (press ?)", "?")
       )
     ),
 
-    mainPanel(
-      width = 9,
-      # Persistent banners: read/parse failures are explained on every tab instead
-      # of leaving the user staring at empty panels.
-      uiOutput("load_error_banner"),
-      uiOutput("encoding_note_banner"),
-      tabsetPanel(
-        id = "main_tabs",
+    # --- Workspace ----------------------------------------------------------
+    div(class = "rtrce-workspace",
 
-        # --- TAB 0: WORKSPACE (editor + console + environment) ---
-        # Placed first because this is the pane a user should live in: edit, run,
-        # see what happened. The analysis tabs keep their existing behaviour.
-        tabPanel("Workspace",
-          br(),
-          div(class = "card", style = "margin-bottom: 12px;",
-            h4(style = "margin-top: 0;", "Source & Console"),
-            p(style = "color: #64748b; font-size: 12px; margin-bottom: 12px;",
-              "This is where you edit and run R. Everything you change here flows into the analysis, walkthrough and student tabs automatically."),
-            studio_editor_ui(DEFAULT_CODE, "sample_pipeline.R"),
-            br(),
-            studio_console_ui(),
-            br(),
-            div(class = "card", style = "margin-bottom: 0;",
-              h4("Environment"),
-              p(style = "color: #64748b; font-size: 12px;", "Objects created by your code, refreshed after every run."),
-              tableOutput("session_workspace_table")
-            )
-          )
+      # Left column: the source you edit, above the panel you work in.
+      div(class = "rtrce-col",
+
+        div(class = "rtrce-pane rtrce-pane-fill",
+          studio_editor_ui(DEFAULT_CODE, "sample_pipeline.R")
         ),
+
+        div(class = "rtrce-split rtrce-split-h", `data-split` = "bottom", title = "Drag to resize (double-click to reset)"),
+
+        div(class = "rtrce-pane rtrce-pane-fill",
+          # Failures are explained inside the pane the user is looking at, rather
+          # than on every tab as before.
+          uiOutput("load_error_banner"),
+          uiOutput("encoding_note_banner"),
+          tabsetPanel(
+            id = "main_tabs",
+
+            # --- CONSOLE ---
+            tabPanel("Console",
+              studio_console_ui()
+            ),
+
+            # --- PROJECT (file loading + annotation settings, moved out of the
+            #     old sidebar into the workspace where it belongs) ---
+            tabPanel("Project",
+              br(),
+              div(class = "card",
+                h4("Source R File"),
+                fileInput("file_upload", "Drop or Upload .R File:", accept = c(".R", ".r"), buttonLabel = "Browse...", placeholder = "No file chosen"),
+                if (length(sample_files) > 0) {
+                  selectInput("sample_select", "Or load an example script:",
+                              choices = c("--- Choose sample ---" = "", sample_files),
+                              selected = "")
+                },
+                actionButton("btn_reset_sample", "Reset to Default Sample", class = "btn-default btn-xs")
+              ),
+
+              div(class = "card",
+                h4("Annotation Settings"),
+                textInput("trce_prefix", "Trace ID Prefix:", value = "trce-r"),
+                selectInput("trce_style", "Annotation Style:", choices = c("JSDoc (# /** ... */)" = "jsdoc", "Roxygen (#' ...)" = "roxygen")),
+                checkboxInput("inc_header", "Include File-Level Header", value = TRUE),
+                hr(),
+                actionButton("btn_batch_annotate", "Annotate All Immediately", class = "btn-primary btn-block"),
+                p(style = "font-size: 11px; margin-top: 6px;",
+                  "Or use the Guided Walkthrough tab to step through and approve each component.")
+              ),
+
+              # Always-visible primer so a first-time user knows what an annotation is.
+              div(class = "card",
+                h4("New to TRCE?"),
+                p(class = "rt-sm", style = "color: var(--rt-text-muted);",
+                  "TRCE describes a piece of code by answering six questions. This tool writes those answers into your file as a comment block."),
+                tags$ul(class = "rt-sm", style = "color: var(--rt-text-muted); padding-left: 18px; line-height: 1.7;",
+                  tags$li(strong("WHO "), "runs it? (user, Shiny server, cron job)"),
+                  tags$li(strong("WHAT "), "does it mechanically do? (join, filter, model)"),
+                  tags$li(strong("WHERE "), "does it sit? (which file, who calls it, what it calls)"),
+                  tags$li(strong("WHEN "), "does it fire? (at load, on click, once per row)"),
+                  tags$li(strong("WHY "), "does it exist? (the problem it solves)"),
+                  tags$li(strong("HOW "), "is it built? (parameters, state changes)")
+                ),
+                p(class = "rt-xs", style = "color: var(--rt-text-faint);",
+                  strong("Coverage %"), " = share of annotatable components (functions, Shiny blocks, schemas, CLI runners) that already carry a block."),
+                p(class = "rt-xs", style = "color: var(--rt-text-faint); margin: 0;",
+                  strong("Archetypes"), " you may see: data_pipeline, statistical_model, visualization, shiny_server, cli_dispatcher, utility_function.")
+              )
+            ),
 
         # --- TAB 1: GUIDED WALKTHROUGH ---
         tabPanel("Guided Walkthrough",
@@ -465,10 +472,50 @@ ui <- fluidPage(
             )
           )
         )
+      ),   # end tabsetPanel(main_tabs)
+      ),   # end bottom pane
+      ),   # end left column
+
+      div(class = "rtrce-split rtrce-split-v", `data-split` = "rail", title = "Drag to resize (double-click to reset)"),
+
+      # Right rail: what the session holds. Same five panes RStudio users reach
+      # for, plus the analysis views that already existed.
+      div(class = "rtrce-col-rail",
+        div(class = "rtrce-pane rtrce-pane-fill rtrce-rail-tabs",
+          tabsetPanel(
+            id = "rail_tabs",
+
+            tabPanel("Environment",
+              p(class = "rt-xs", style = "color: var(--rt-text-faint); margin-bottom: 8px;",
+                "Every object your code has created, refreshed after each run."),
+              tableOutput("session_workspace_table")
+            ),
+
+            tabPanel("Files",
+              uiOutput("files_pane_ui")
+            ),
+
+            tabPanel("Plots",
+              uiOutput("plots_pane_ui")
+            ),
+
+            tabPanel("Packages",
+              uiOutput("packages_pane_ui")
+            ),
+
+            tabPanel("Help",
+              uiOutput("help_pane_ui")
+            )
+          )
+        )
       )
-    )
-  )
-)
+
+    ),   # end .rtrce-workspace
+
+    # --- Status bar ---------------------------------------------------------
+    tags$footer(class = "rtrce-statusbar", uiOutput("statusbar_ui"))
+  )      # end .rtrce-app
+)        # end fluidPage
 
 # --- SERVER LOGIC ---
 # /**
@@ -515,6 +562,19 @@ server <- function(input, output, session) {
 
   # The single place code is executed. It returns the engine's result so callers
   # can react to errors, and it refreshes everything that depends on the session.
+  #
+  # Plots are published here, not in the pane: the browser can only fetch a file
+  # that Shiny serves, so each captured PNG is copied into www/plots and the web
+  # path is stored with the plot record.
+  publish_plot <- function(file) {
+    if (is.null(file) || !file.exists(file)) return(NULL)
+    plot_dir <- file.path(script_dir, "www", "plots")
+    dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
+    target <- file.path(plot_dir, basename(file))
+    if (!isTRUE(file.copy(file, target, overwrite = TRUE))) return(NULL)
+    sprintf("rtrce/plots/%s", basename(file))
+  }
+
   run_code <- function(code, label = "console", from = NULL, to = NULL) {
     live <- live_session()
     result <- session_evaluate(live, code)
@@ -523,6 +583,19 @@ server <- function(input, output, session) {
     # environment table and console status re-render.
     live_session(live)
     session_revision(session_revision() + 1L)
+
+    # Publish any plot captured by this run so the Plots pane can display it. The
+    # engine stays UI-agnostic; the Studio decides how a plot reaches a browser.
+    for (i in seq_along(live$plots)) {
+      if (is.null(live$plots[[i]]$web_path)) {
+        live$plots[[i]]$web_path <- publish_plot(live$plots[[i]]$file)
+      }
+    }
+    for (i in seq_along(result$plots)) {
+      if (is.null(result$plots[[i]]$web_path)) {
+        result$plots[[i]]$web_path <- publish_plot(result$plots[[i]]$file)
+      }
+    }
 
     new_entries <- list()
     if (isTRUE(result$incomplete)) {
@@ -559,24 +632,12 @@ server <- function(input, output, session) {
     result
   }
 
-  # The contract the editor and console panes are written against.
-  studio_state <- list(
-    code      = working_code,        # the document: single source of truth
-    filename  = active_filename,
-    path      = active_file_path,
-    converted = reactive({ !is.null(encoding_note()) }),
-    live      = live_session,
-    log       = console_log,
-    revision  = session_revision,
-    run       = run_code,
-    restart   = function() {
-      live <- live_session()
-      session_reset(live)
-      live_session(live)             # keep the handle current
-      session_revision(session_revision() + 1L)
-      invisible(live)
-    }
-  )
+  # The contract the editor, console and rail panes are written against.
+  #
+  # WHY this is built at the very end of server(): a list literal is evaluated
+  # eagerly, so referencing a reactive that is defined further down (validation,
+  # analysis) would fail at startup with "object not found" -- which is exactly
+  # how this was found.
 
   output$session_workspace_table <- renderTable({
     session_revision()               # re-render whenever the session runs
@@ -1260,12 +1321,49 @@ server <- function(input, output, session) {
     )
   })
 
-  # --- EDITOR & CONSOLE PANES -------------------------------------------------
-  # Registered last so the state they are given is fully defined above. Both
-  # panes render only into the Workspace tab, but their observers must exist for
-  # the whole session: a Ctrl+Enter can arrive while another tab is selected.
+  # --- EDITOR, CONSOLE & RAIL PANES -------------------------------------------
+  # Registered last so the state they are given is fully defined above. The
+  # observers must exist for the whole session: a Ctrl+Enter can arrive while
+  # another tab is selected.
+  #
+  # WHY a list of reactives rather than one large reactive: each pane subscribes
+  # to exactly what it shows, so a plot appearing does not re-render the file
+  # browser and a keystroke does not re-render a table.
+  studio_state <- list(
+    code       = working_code,       # the document: single source of truth
+    filename   = active_filename,
+    path       = active_file_path,
+    converted  = reactive({ !is.null(encoding_note()) }),
+    live       = live_session,
+    log        = console_log,
+    revision   = session_revision,
+    run        = run_code,
+    open_file  = function(path, display_name) load_source_file(path, display_name),
+    # The working directory is read from the process, not remembered: user code
+    # can call setwd() itself, and the panes must agree with what R actually did.
+    wd         = reactive({ session_revision(); getwd() }),
+    imports    = reactive({
+      a <- analysis_data()
+      if (is.null(a)) character(0) else a$imports
+    }),
+    validation = validation_data,
+    touch      = function() session_revision(session_revision() + 1L),
+    restart    = function() {
+      live <- live_session()
+      session_reset(live)
+      live_session(live)             # keep the handle current
+      session_revision(session_revision() + 1L)
+      invisible(live)
+    }
+  )
+
   studio_editor_server(input, output, session, studio_state)
   studio_console_server(input, output, session, studio_state)
+  studio_files_pane_server(input, output, session, studio_state)
+  studio_plots_pane_server(input, output, session, studio_state)
+  studio_packages_pane_server(input, output, session, studio_state)
+  studio_help_pane_server(input, output, session)
+  studio_chrome_server(input, output, session, studio_state)
 }
 
 # --- STANDALONE APP LAUNCHER ---

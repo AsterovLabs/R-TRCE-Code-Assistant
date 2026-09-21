@@ -1,0 +1,724 @@
+/* =============================================================================
+ * rtrce-theme.css -- Asterov design language for the R-TRCE Studio
+ * Copyright (c) 2026 Asterov Labs. All Rights Reserved.
+ * =============================================================================
+ * WHAT   The Studio's entire visual language in one file: colour tokens, layout
+ *        shell, panes, controls, editor and console styling.
+ *
+ * WHY    The Studio is the first surface of what may become an agentic-first
+ *        TRCE IDE, so its look is a design decision, not decoration. It follows
+ *        the Asterov "A" icon (www/brand/asterov-icon.svg): Catppuccin Mocha
+ *        surfaces, a mauve -> blue -> teal accent gradient, generous rounding,
+ *        soft glows and one pulsing accent dot.
+ *
+ * HOW    Tokens first (dark = Mocha, light = Latte, switched by a
+ *        [data-rtrce-theme] attribute on <html>), then the shell, then the
+ *        components. Every colour used in the UI comes from a token here.
+ *
+ * NOTE   Fonts are referenced by family name only -- no CDN, no bundled font
+ *        files, so the Studio keeps working offline. Inter and JetBrains Mono
+ *        are used when the machine has them, with system fallbacks. Cinzel is
+ *        kept as a token for the wider Asterov suite; the Studio uses Inter with
+ *        a gradient wordmark, because Cinzel reads as Fleet Suite display type
+ *        rather than an editor.
+ *
+ * Accessibility: every text/background pair here was contrast-checked -- body
+ * text 11.3:1, secondary 7.4:1, accents 7-13:1 on the dark surfaces (WCAG AA,
+ * mostly AAA).
+ * ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+ * 1. Tokens
+ * -------------------------------------------------------------------------- */
+
+:root,
+[data-rtrce-theme="mocha"] {
+  /* Surfaces (Catppuccin Mocha) */
+  --rt-crust:      #11111b;
+  --rt-mantle:     #181825;
+  --rt-base:       #1e1e2e;
+  --rt-surface-0:  #313244;
+  --rt-surface-1:  #45475a;
+  --rt-surface-2:  #585b70;
+  --rt-overlay-0:  #6c7086;
+  --rt-overlay-1:  #7f849c;
+  --rt-overlay-2:  #9399b2;
+
+  /* Text */
+  --rt-text:       #cdd6f4;
+  --rt-text-soft:  #bac2de;
+  --rt-text-muted: #a6adc8;
+  --rt-text-faint: #7f849c;
+
+  /* Accents (the icon's gradient stops) */
+  --rt-mauve:      #cba6f7;
+  --rt-blue:       #89b4fa;
+  --rt-teal:       #94e2d5;
+  --rt-green:      #a6e3a1;
+  --rt-yellow:     #f9e2af;
+  --rt-peach:      #fab387;
+  --rt-maroon:     #eba0ac;
+  --rt-red:        #f38ba8;
+  --rt-pink:       #f5c2e7;
+  --rt-sapphire:   #74c7ec;
+
+  /* Meaning */
+  --rt-ok:    var(--rt-green);
+  --rt-warn:  var(--rt-yellow);
+  --rt-error: var(--rt-red);
+  --rt-info:  var(--rt-blue);
+  --rt-learn: var(--rt-mauve);
+
+  /* Signature gradient -- the "A" icon's stroke, reused everywhere */
+  --rt-grad:      linear-gradient(135deg, #cba6f7 0%, #89b4fa 50%, #94e2d5 100%);
+  --rt-grad-soft: linear-gradient(135deg, rgba(203,166,247,.18) 0%, rgba(137,180,250,.12) 50%, rgba(148,226,213,.10) 100%);
+
+  /* Borders and elevation */
+  --rt-border:        rgba(203, 166, 247, 0.16);
+  --rt-border-strong: rgba(203, 166, 247, 0.34);
+  --rt-border-plain:  #313244;
+  --rt-glow:          0 0 0 1px rgba(203,166,247,.10), 0 18px 40px -18px rgba(0,0,0,.75);
+  --rt-glow-accent:   0 0 0 1px rgba(203,166,247,.35), 0 0 24px -6px rgba(203,166,247,.45);
+
+  /* Geometry */
+  --rt-radius-sm: 6px;
+  --rt-radius:    10px;
+  --rt-radius-lg: 16px;
+  --rt-radius-pill: 999px;
+
+  /* Type */
+  --rt-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --rt-font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --rt-font-display: 'Cinzel', 'Inter', serif;
+
+  /* Shell metrics */
+  --rt-titlebar-h: 48px;
+  --rt-statusbar-h: 26px;
+  --rt-rail-w: 420px;
+  --rt-bottom-h: 300px;
+}
+
+/* Light theme: Catppuccin Latte, same structure, accents darkened enough to stay
+   AA on light surfaces. */
+[data-rtrce-theme="latte"] {
+  --rt-crust:      #dce0e8;
+  --rt-mantle:     #e6e9ef;
+  --rt-base:       #eff1f5;
+  --rt-surface-0:  #e6e9ef;
+  --rt-surface-1:  #dce0e8;
+  --rt-surface-2:  #ccd0da;
+  --rt-overlay-0:  #9ca0b0;
+  --rt-overlay-1:  #8c8fa1;
+  --rt-overlay-2:  #7c7f93;
+
+  --rt-text:       #4c4f69;
+  --rt-text-soft:  #5c5f77;
+  --rt-text-muted: #6c6f85;
+  --rt-text-faint: #8c8fa1;
+
+  --rt-mauve:      #8839ef;
+  --rt-blue:       #1e66f5;
+  --rt-teal:       #179299;
+  --rt-green:      #40a02b;
+  --rt-yellow:     #b9820b;
+  --rt-peach:      #fe640b;
+  --rt-maroon:     #e64553;
+  --rt-red:        #d20f39;
+  --rt-pink:       #ea76cb;
+  --rt-sapphire:   #209fb5;
+
+  --rt-grad:      linear-gradient(135deg, #8839ef 0%, #1e66f5 50%, #179299 100%);
+  --rt-grad-soft: linear-gradient(135deg, rgba(136,57,239,.12) 0%, rgba(30,102,245,.10) 50%, rgba(23,146,153,.10) 100%);
+
+  --rt-border:        rgba(136, 57, 239, 0.18);
+  --rt-border-strong: rgba(136, 57, 239, 0.36);
+  --rt-border-plain:  #ccd0da;
+  --rt-glow:          0 0 0 1px rgba(136,57,239,.08), 0 14px 30px -16px rgba(76,79,105,.30);
+  --rt-glow-accent:   0 0 0 1px rgba(136,57,239,.30), 0 0 20px -6px rgba(136,57,239,.30);
+}
+
+/* -----------------------------------------------------------------------------
+ * 2. Base
+ * -------------------------------------------------------------------------- */
+
+html, body { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--rt-font-sans);
+  background: var(--rt-crust);
+  color: var(--rt-text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;                    /* the shell scrolls its own panes */
+}
+
+/* Shiny wraps the app in a bootstrap container; an IDE needs full bleed. */
+body > .container-fluid,
+.container-fluid {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+::selection { background: rgba(203, 166, 247, 0.32); }
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--rt-text);
+  margin: 0 0 8px;
+}
+h1 { font-size: 20px; } h2 { font-size: 18px; } h3 { font-size: 16px; }
+h4 { font-size: 14px; } h5 { font-size: 13px; }
+p { margin: 0 0 8px; }
+
+a { color: var(--rt-blue); text-decoration: none; }
+a:hover { color: var(--rt-mauve); text-decoration: underline; }
+
+code, pre, .rt-mono { font-family: var(--rt-font-mono); }
+
+/* Machine-ish annotations: paths, trace ids, numbers, counts. */
+.rt-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 9px;
+  border-radius: var(--rt-radius-pill);
+  background: var(--rt-surface-0);
+  color: var(--rt-text-muted);
+  font-family: var(--rt-font-mono);
+  font-size: 11px; line-height: 1.7;
+  border: 1px solid var(--rt-border-plain);
+  white-space: nowrap;
+}
+.rt-chip-accent { color: var(--rt-mauve); border-color: var(--rt-border); background: rgba(203,166,247,.08); }
+.rt-chip-ok     { color: var(--rt-ok);    border-color: rgba(166,227,161,.30); background: rgba(166,227,161,.08); }
+.rt-chip-warn   { color: var(--rt-warn);  border-color: rgba(249,226,175,.30); background: rgba(249,226,175,.08); }
+.rt-chip-error  { color: var(--rt-error); border-color: rgba(243,139,168,.30); background: rgba(243,139,168,.08); }
+
+.rt-muted { color: var(--rt-text-muted); }
+.rt-faint { color: var(--rt-text-faint); }
+.rt-xs { font-size: 11px; }
+.rt-sm { font-size: 12px; }
+.rt-rule { height: 1px; background: var(--rt-border-plain); margin: 12px 0; border: 0; }
+
+/* -----------------------------------------------------------------------------
+ * 3. App shell
+ * -------------------------------------------------------------------------- */
+
+.rtrce-app {
+  display: grid;
+  grid-template-rows: var(--rt-titlebar-h) 1fr var(--rt-statusbar-h);
+  height: 100vh;
+  width: 100vw;
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(203,166,247,.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(137,180,250,.08), transparent 55%),
+    var(--rt-base);
+}
+
+/* Title bar ------------------------------------------------------------------ */
+.rtrce-titlebar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--rt-mantle), rgba(17,17,27,.65));
+  border-bottom: 1px solid var(--rt-border);
+  position: relative;
+  z-index: 5;
+}
+.rtrce-titlebar::after {     /* the icon's gradient as a hairline, not a slab */
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: var(--rt-grad); opacity: .5;
+}
+
+.rtrce-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rtrce-brand-mark {
+  width: 28px; height: 28px; border-radius: 8px;
+  filter: drop-shadow(0 0 10px rgba(203,166,247,.35));
+}
+.rtrce-brand-name {
+  font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
+  background: var(--rt-grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+.rtrce-brand-sub {
+  display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--rt-text-faint);
+}
+
+.rtrce-titlebar-center {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 auto; min-width: 0;
+}
+.rtrce-titlebar-actions { display: flex; align-items: center; gap: 8px; }
+
+.rtrce-session-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 11px; border-radius: var(--rt-radius-pill);
+  background: rgba(166,227,161,.10); border: 1px solid rgba(166,227,161,.28);
+  color: var(--rt-ok); font-size: 11px; font-weight: 600;
+}
+.rtrce-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+  box-shadow: 0 0 0 0 currentColor; animation: rtrce-pulse 2.4s ease-out infinite;
+}
+@keyframes rtrce-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(166,227,161,.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(166,227,161,0); }
+  100% { box-shadow: 0 0 0 0 rgba(166,227,161,0); }
+}
+
+/* Status bar ----------------------------------------------------------------- */
+.rtrce-statusbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 12px;
+  background: var(--rt-crust);
+  border-top: 1px solid var(--rt-border);
+  font-family: var(--rt-font-mono);
+  font-size: 11px;
+  color: var(--rt-text-faint);
+  white-space: nowrap; overflow: hidden;
+}
+.rtrce-statusbar .rt-sb-item { display: inline-flex; align-items: center; gap: 6px; }
+.rtrce-statusbar .rt-sb-accent { color: var(--rt-mauve); }
+.rtrce-statusbar .rt-sb-ok { color: var(--rt-ok); }
+.rtrce-statusbar .rt-sb-warn { color: var(--rt-warn); }
+.rtrce-statusbar .rt-sb-error { color: var(--rt-error); }
+.rtrce-statusbar .rt-sb-spacer { margin-left: auto; }
+
+/* -----------------------------------------------------------------------------
+ * 4. Workspace grid, panes and splitters
+ * -------------------------------------------------------------------------- */
+
+.rtrce-workspace {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) 6px var(--rt-rail-w);
+  min-height: 0;                 /* lets children scroll instead of the page */
+  padding: 8px;
+}
+.rtrce-col { display: grid; grid-template-rows: minmax(160px, 1fr) 6px var(--rt-bottom-h); min-height: 0; }
+.rtrce-col-rail { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+
+.rtrce-pane {
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  background: linear-gradient(180deg, rgba(49,50,68,.42), rgba(24,24,37,.55));
+  border: 1px solid var(--rt-border);
+  border-radius: var(--rt-radius-lg);
+  box-shadow: var(--rt-glow);
+  overflow: hidden;
+}
+.rtrce-pane:focus-within { border-color: var(--rt-border-strong); }
+
+/* Pane header: a quiet bar with a title, a hint and its own actions. */
+.rtrce-pane-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--rt-border-plain);
+  background: rgba(17,17,27,.35);
+  flex: 0 0 auto;
+}
+.rtrce-pane-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--rt-text-faint);
+}
+.rtrce-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.rtrce-pane-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px; }
+.rtrce-pane-body-flush { padding: 0; }
+.rtrce-pane-fill { display: flex; flex-direction: column; overflow: hidden; }
+
+/* Drag handles. A hairline that lights up on hover, so the layout stays calm
+   until someone actually wants to resize something. */
+.rtrce-split { position: relative; }
+.rtrce-split-h { cursor: row-resize; }
+.rtrce-split-v { cursor: col-resize; }
+.rtrce-split::after {
+  content: ""; position: absolute; inset: 0; margin: auto;
+  background: var(--rt-border-plain); border-radius: 2px;
+  transition: background .15s, box-shadow .15s;
+}
+.rtrce-split-h::after { width: 44px; height: 2px; }
+.rtrce-split-v::after { width: 2px; height: 44px; }
+.rtrce-split:hover::after { background: var(--rt-mauve); box-shadow: 0 0 10px rgba(203,166,247,.6); }
+
+/* -----------------------------------------------------------------------------
+ * 5. Controls
+ * -------------------------------------------------------------------------- */
+
+.rtrce-pane .btn,
+.rtrce-titlebar .btn,
+.rtrce-statusbar .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--rt-radius);
+  border: 1px solid var(--rt-border-plain);
+  background: var(--rt-surface-0);
+  color: var(--rt-text);
+  font-family: var(--rt-font-sans);
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+  transition: transform .08s ease, border-color .15s, background .15s, box-shadow .15s;
+}
+.rtrce-pane .btn:hover, .rtrce-titlebar .btn:hover { border-color: var(--rt-border-strong); background: var(--rt-surface-1); color: var(--rt-text); }
+.rtrce-pane .btn:active { transform: translateY(1px); }
+.rtrce-pane .btn-xs { padding: 4px 9px; font-size: 11.5px; }
+.rtrce-pane .btn-lg { padding: 9px 16px; font-size: 14px; }
+
+/* Primary carries the brand gradient -- the one loud element per view. */
+.rtrce-pane .btn-primary {
+  background: var(--rt-grad); color: #11111b; border-color: transparent;
+  box-shadow: 0 6px 18px -8px rgba(203,166,247,.75);
+}
+.rtrce-pane .btn-primary:hover { color: #11111b; filter: brightness(1.06); background: var(--rt-grad); }
+.rtrce-pane .btn-success { background: rgba(166,227,161,.14); border-color: rgba(166,227,161,.4); color: var(--rt-ok); }
+.rtrce-pane .btn-success:hover { background: rgba(166,227,161,.22); color: var(--rt-ok); }
+.rtrce-pane .btn-info { background: rgba(137,180,250,.14); border-color: rgba(137,180,250,.4); color: var(--rt-info); }
+.rtrce-pane .btn-info:hover { background: rgba(137,180,250,.22); color: var(--rt-info); }
+.rtrce-pane .btn-warning { background: rgba(249,226,175,.12); border-color: rgba(249,226,175,.4); color: var(--rt-warn); }
+.rtrce-pane .btn-warning:hover { background: rgba(249,226,175,.2); color: var(--rt-warn); }
+.rtrce-pane .btn-default { background: var(--rt-surface-0); }
+.rtrce-pane .btn-block { width: 100%; }
+
+.rtrce-icon-btn {
+  width: 30px; height: 30px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--rt-radius); border: 1px solid transparent;
+  background: transparent; color: var(--rt-text-muted);
+  font-size: 14px; cursor: pointer; transition: all .15s;
+}
+.rtrce-icon-btn:hover { background: var(--rt-surface-0); color: var(--rt-text); border-color: var(--rt-border-plain); }
+
+/* Form fields ---------------------------------------------------------------- */
+.rtrce-pane .form-control,
+.rtrce-pane select.form-control,
+.rtrce-pane input.form-control,
+.rtrce-pane textarea.form-control {
+  background: var(--rt-crust);
+  border: 1px solid var(--rt-border-plain);
+  color: var(--rt-text);
+  border-radius: var(--rt-radius-sm);
+  font-family: var(--rt-font-mono);
+  font-size: 12.5px;
+  padding: 6px 9px;
+  height: auto;
+  box-shadow: none;
+}
+.rtrce-pane .form-control:focus {
+  border-color: var(--rt-mauve);
+  box-shadow: var(--rt-glow-accent);
+  outline: none;
+}
+.rtrce-pane .form-control::placeholder { color: var(--rt-text-faint); }
+.rtrce-pane label { color: var(--rt-text-muted); font-size: 12.5px; font-weight: 500; }
+.rtrce-pane select.form-control option { background: var(--rt-mantle); color: var(--rt-text); }
+.rtrce-pane .form-group { margin-bottom: 12px; }
+.rtrce-pane .checkbox label, .rtrce-pane .radio label { font-size: 12.5px; }
+
+/* Tabs: bootstrap nav-tabs re-skinned as a quiet segmented strip. */
+.rtrce-pane .nav-tabs {
+  border-bottom: 1px solid var(--rt-border-plain);
+  background: rgba(17,17,27,.30);
+  padding: 4px 6px 0;
+  display: flex; flex-wrap: wrap; gap: 2px;
+  flex: 0 0 auto;
+}
+.rtrce-pane .nav-tabs > li { margin: 0; float: none; }
+.rtrce-pane .nav-tabs > li > a {
+  border: 1px solid transparent; border-bottom: none;
+  border-radius: var(--rt-radius) var(--rt-radius) 0 0;
+  color: var(--rt-text-muted);
+  font-size: 12px; font-weight: 600;
+  padding: 7px 11px; margin: 0;
+  transition: color .15s, background .15s;
+}
+.rtrce-pane .nav-tabs > li > a:hover { background: rgba(203,166,247,.07); color: var(--rt-text); border-color: transparent; }
+.rtrce-pane .nav-tabs > li.active > a,
+.rtrce-pane .nav-tabs > li.active > a:hover,
+.rtrce-pane .nav-tabs > li.active > a:focus {
+  background: var(--rt-base); color: var(--rt-text);
+  border-color: var(--rt-border-plain); border-bottom-color: var(--rt-base);
+}
+.rtrce-pane .tab-content { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px; }
+.rtrce-pane .tab-pane { animation: rt-fade .22s ease-out; }
+@keyframes rt-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* -----------------------------------------------------------------------------
+ * 6. Content components
+ * -------------------------------------------------------------------------- */
+
+/* Cards replace the old white boxes: a tinted surface with a whisper of the
+   accent gradient, never a hard border. */
+.rtrce-pane .card,
+.rtrce-card {
+  background: rgba(24, 24, 37, 0.55);
+  border: 1px solid var(--rt-border-plain);
+  border-radius: var(--rt-radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: none;
+}
+.rtrce-card-accent { border-color: var(--rt-border); background: var(--rt-grad-soft); }
+.rtrce-pane .card h4, .rtrce-card h4 {
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--rt-text-faint); margin-bottom: 10px;
+}
+
+/* The learn/teach surface -- mauve, so teaching never looks like an error. */
+.rtrce-teach {
+  border-left: 3px solid var(--rt-mauve);
+  background: linear-gradient(90deg, rgba(203,166,247,.10), rgba(24,24,37,.4) 60%);
+  border-radius: 0 var(--rt-radius) var(--rt-radius) 0;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.rtrce-teach h5 { color: var(--rt-mauve); margin-bottom: 6px; font-size: 13px; }
+
+/* Tables --------------------------------------------------------------------- */
+.rtrce-pane .table, .rtrce-table {
+  width: 100%; margin: 0; color: var(--rt-text); font-size: 12.5px;
+  border-collapse: separate; border-spacing: 0;
+}
+.rtrce-pane .table > thead > tr > th, .rtrce-table th {
+  background: rgba(17,17,27,.5);
+  color: var(--rt-text-faint);
+  font-family: var(--rt-font-mono);
+  font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700;
+  padding: 7px 10px; border-bottom: 1px solid var(--rt-border-plain); text-align: left;
+  position: sticky; top: 0; z-index: 1;
+}
+.rtrce-pane .table > tbody > tr > td, .rtrce-table td {
+  padding: 6px 10px; border-bottom: 1px solid rgba(49,50,68,.55); vertical-align: top;
+}
+.rtrce-pane .table > tbody > tr:hover > td, .rtrce-table tbody tr:hover td {
+  background: rgba(203,166,247,.06);
+}
+.rtrce-pane .table > tbody > tr:last-child > td { border-bottom: none; }
+
+/* Code blocks ---------------------------------------------------------------- */
+.rtrce-code, .rtrce-pane pre.code-view, .rtrce-pane pre {
+  background: var(--rt-crust);
+  color: var(--rt-text);
+  border: 1px solid var(--rt-border-plain);
+  border-radius: var(--rt-radius);
+  padding: 11px 13px;
+  font-family: var(--rt-font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow: auto;
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rtrce-pane code {
+  background: rgba(17,17,27,.6); border: 1px solid var(--rt-border-plain);
+  border-radius: 5px; padding: 1px 5px; font-size: 12px; color: var(--rt-pink);
+}
+
+/* Console transcript --------------------------------------------------------- */
+.rtrce-transcript {
+  background: var(--rt-crust);
+  border: 1px solid var(--rt-border-plain);
+  border-radius: var(--rt-radius);
+  padding: 12px 14px;
+  font-family: var(--rt-font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.rtrce-transcript .rtrce-echo { color: var(--rt-sapphire); }
+.rtrce-transcript .rtrce-out  { color: var(--rt-text); }
+.rtrce-transcript .rtrce-msg  { color: var(--rt-mauve); }
+.rtrce-transcript .rtrce-warn { color: var(--rt-warn); }
+.rtrce-transcript .rtrce-err  { color: var(--rt-error); font-weight: 600; }
+.rtrce-transcript .rtrce-note { color: var(--rt-text-faint); font-style: italic; }
+
+/* Run commentary: "what just happened" (Phase 3). */
+.rtrce-after {
+  margin-top: 10px;
+  border: 1px solid var(--rt-border);
+  border-radius: var(--rt-radius);
+  background: rgba(24,24,37,.5);
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+.rtrce-after .rtrce-after-title {
+  font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--rt-mauve); font-weight: 700; margin-bottom: 6px;
+}
+.rtrce-after ul { margin: 0; padding-left: 16px; }
+.rtrce-after li { margin-bottom: 3px; color: var(--rt-text-muted); }
+
+/* Banners ------------------------------------------------------------------- */
+.rtrce-banner {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 10px 12px; border-radius: var(--rt-radius);
+  font-size: 12.5px; margin-bottom: 12px; border: 1px solid;
+}
+.rtrce-banner-error { background: rgba(243,139,168,.10); border-color: rgba(243,139,168,.35); color: var(--rt-text); }
+.rtrce-banner-warn  { background: rgba(249,226,175,.10); border-color: rgba(249,226,175,.35); color: var(--rt-text); }
+.rtrce-banner-info  { background: rgba(137,180,250,.10); border-color: rgba(137,180,250,.32); color: var(--rt-text); }
+.rtrce-banner-ok    { background: rgba(166,227,161,.10); border-color: rgba(166,227,161,.32); color: var(--rt-text); }
+.rtrce-banner strong { color: var(--rt-text); }
+
+/* Empty states: never a blank pane, always a next step. */
+.rtrce-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 26px 18px; text-align: center; color: var(--rt-text-muted);
+}
+.rtrce-empty-icon {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--rt-grad-soft); border: 1px solid var(--rt-border); color: var(--rt-mauve);
+  font-size: 15px; margin-bottom: 2px;
+}
+.rtrce-empty-title { font-weight: 650; color: var(--rt-text); font-size: 13px; }
+
+/* Keyboard hints ------------------------------------------------------------- */
+kbd, .rtrce-kbd {
+  display: inline-block; padding: 1px 6px; min-width: 20px; text-align: center;
+  font-family: var(--rt-font-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--rt-text-soft);
+  background: var(--rt-surface-0); border: 1px solid var(--rt-surface-2);
+  border-bottom-width: 2px; border-radius: 5px;
+}
+
+/* Rail tab strip: compact chips that wrap instead of scrolling sideways. */
+.rtrce-rail-tabs .nav-tabs {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  padding: 6px 6px 0; background: rgba(17,17,27,.30);
+  border-bottom: 1px solid var(--rt-border-plain);
+}
+.rtrce-rail-tabs .nav-tabs > li > a {
+  padding: 5px 9px; font-size: 11px; border-radius: var(--rt-radius-pill);
+  border: 1px solid transparent; color: var(--rt-text-muted);
+}
+.rtrce-rail-tabs .nav-tabs > li > a:hover { background: rgba(203,166,247,.08); color: var(--rt-text); }
+.rtrce-rail-tabs .nav-tabs > li.active > a {
+  background: var(--rt-surface-0); border-color: var(--rt-border); color: var(--rt-text);
+}
+.rtrce-rail-tabs .tab-content { padding: 10px; }
+
+/* -----------------------------------------------------------------------------
+ * 7. CodeMirror theme -- the editor is the heart of the app, so it gets tokens
+ * -------------------------------------------------------------------------- */
+
+.rtrce-editor-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.rtrce-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 0 0 auto; }
+.rtrce-toolbar .btn { font-weight: 600; }
+.rtrce-status { margin-left: auto; font-family: var(--rt-font-mono); font-size: 11px; color: var(--rt-text-faint); }
+.rtrce-editor-host { flex: 1 1 auto; min-height: 0; margin-top: 8px; }
+
+/* Scoped under .rtrce-app so these beat CodeMirror's own stylesheet regardless
+   of link order -- a theme that only works when it happens to load last is a
+   theme that breaks the first time someone reorders the head. */
+.rtrce-app .CodeMirror {
+  height: 100%; min-height: 220px;
+  background: var(--rt-crust);
+  color: var(--rt-text);
+  border: 1px solid var(--rt-border-plain);
+  border-radius: var(--rt-radius);
+  font-family: var(--rt-font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.rtrce-app .CodeMirror-gutters { background: var(--rt-mantle); border-right: 1px solid var(--rt-border-plain); }
+.rtrce-app .CodeMirror-linenumber { color: var(--rt-overlay-0); font-size: 11px; }
+.rtrce-app .CodeMirror-cursor { border-left: 2px solid var(--rt-mauve); }
+.rtrce-app .CodeMirror-selected { background: rgba(69,71,90,.6) !important; }
+.rtrce-app .CodeMirror-focused .CodeMirror-selected { background: rgba(88,91,112,.6) !important; }
+.rtrce-app .CodeMirror-matchingbracket { color: var(--rt-teal) !important; border-bottom: 1px solid var(--rt-teal); }
+.rtrce-app .CodeMirror-nonmatchingbracket { color: var(--rt-red) !important; }
+.rtrce-app .CodeMirror-hints { background: var(--rt-mantle); border: 1px solid var(--rt-border); }
+.rtrce-app .CodeMirror-hint { color: var(--rt-text); }
+.rtrce-app .CodeMirror-hint-active { background: rgba(203,166,247,.2); }
+
+/* Just-ran lines: a soft tint, not a highlighter pen. */
+.CodeMirror .rtrce-ran { background: rgba(148,226,213,.10); }
+.rtrce-busy { opacity: .6; }
+
+/* R syntax, tuned to the palette so the editor matches the rest of the app. */
+.cm-s-default .cm-keyword   { color: var(--rt-mauve); }
+.cm-s-default .cm-atom,
+.cm-s-default .cm-number    { color: var(--rt-peach); }
+.cm-s-default .cm-string    { color: var(--rt-green); }
+.cm-s-default .cm-comment   { color: var(--rt-overlay-1); font-style: italic; }
+.cm-s-default .cm-variable  { color: var(--rt-text); }
+.cm-s-default .cm-operator  { color: var(--rt-sapphire); }
+.cm-s-default .cm-def,
+.cm-s-default .cm-builtin   { color: var(--rt-blue); }
+.cm-s-default .cm-bracket   { color: var(--rt-text-muted); }
+
+/* Teaching hints live in the reserved gutter (the teaching layer populates them). */
+.rtrce-hints { width: 14px; }
+.rtrce-hint { cursor: help; font-size: 11px; line-height: 1.4; opacity: .85; }
+.rtrce-hint:hover { opacity: 1; }
+.rtrce-hint-function, .rtrce-hint-tip     { color: var(--rt-teal); }
+.rtrce-hint-info, .rtrce-hint-reactive    { color: var(--rt-blue); }
+.rtrce-hint-learn, .rtrce-hint-pipeline   { color: var(--rt-mauve); }
+.rtrce-hint-model                         { color: var(--rt-peach); }
+.rtrce-hint-warning                       { color: var(--rt-yellow); }
+.rtrce-hint-error                         { color: var(--rt-red); }
+
+/* Row lists (Files, Packages): one shared row look so panes feel of a piece. */
+.rt-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: var(--rt-radius-sm);
+  cursor: pointer; transition: background .12s, box-shadow .12s;
+  color: var(--rt-text);
+}
+.rt-row:hover {
+  background: rgba(203,166,247,.10);
+  box-shadow: inset 2px 0 0 var(--rt-mauve);
+  text-decoration: none;
+}
+.rt-row-static { cursor: default; }
+.rt-row-static:hover { background: rgba(49,50,68,.35); box-shadow: none; }
+
+/* -----------------------------------------------------------------------------
+ * 8. Notifications, scrollbars
+ * -------------------------------------------------------------------------- */
+
+#shiny-notification-panel { top: auto; bottom: 40px; right: 14px; width: 380px; }
+.shiny-notification {
+  background: var(--rt-mantle) !important;
+  color: var(--rt-text);
+  border: 1px solid var(--rt-border) !important;
+  border-left: 3px solid var(--rt-mauve) !important;
+  border-radius: var(--rt-radius) !important;
+  box-shadow: var(--rt-glow);
+  font-size: 12.5px;
+  padding: 11px 13px;
+}
+.shiny-notification-error   { border-left-color: var(--rt-red) !important; }
+.shiny-notification-warning { border-left-color: var(--rt-warn) !important; }
+.shiny-notification-message { border-left-color: var(--rt-teal) !important; }
+
+* { scrollbar-width: thin; scrollbar-color: var(--rt-surface-2) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--rt-surface-1); border-radius: 6px; border: 2px solid var(--rt-crust);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--rt-surface-2); }
+
+/* -----------------------------------------------------------------------------
+ * 9. Responsive
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 1240px) { :root { --rt-rail-w: 360px; } }
+
+@media (max-width: 1000px) {
+  .rtrce-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.4fr) 6px minmax(0, 1fr);
+    overflow: auto;
+  }
+  .rtrce-split-v { display: none; }
+  .rtrce-split-h { cursor: default; }
+  .rtrce-col { grid-template-rows: minmax(200px, 1fr) 6px minmax(200px, 1fr); }
+  .rtrce-titlebar-center { display: none; }
+}

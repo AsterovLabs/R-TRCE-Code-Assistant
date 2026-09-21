@@ -10,3 +10,6 @@ tmp/
 *.tar.gz
 *.Rcheck/
 .DS_Store
+
+# Plots published for the browser at runtime (regenerated on every run)
+www/plots/*.png

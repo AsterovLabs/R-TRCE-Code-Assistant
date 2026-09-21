@@ -37,6 +37,7 @@ source(file.path(root_dir, "R", "explain.R"))
 source(file.path(root_dir, "R", "pedagogy.R"))
 source(file.path(root_dir, "R", "runtime.R"))
 source(file.path(root_dir, "R", "editor_ops.R"))
+source(file.path(root_dir, "R", "studio_panes.R"))
 
 # Test harness helpers
 pass_count <- 0
@@ -452,6 +453,26 @@ assert("history_step() copes with an empty history",
 assert("history_step() copes with a missing index",
        history_step(hist, NA_integer_, "older")$index == 1)
 
+# --- Rail pane helpers (R/studio_panes.R) ---
+# Small, but each one is a place where "looks right" and "is right" differ.
+assert("human_size() formats bytes, kilobytes and megabytes",
+       human_size(0) == "0 B" && human_size(512) == "512 B" &&
+       human_size(1536) == "1.5 KB" && human_size(1048576) == "1.0 MB")
+assert("human_size() does not report an R object's memory size",
+       # The bug this replaced printed "56 bytes" for every file, because
+       # utils::object.size() measures the number, not the file.
+       human_size(62369) != "56 bytes")
+assert("human_size() degrades gracefully on a missing size",
+       human_size(NA) == "?")
+
+row_click <- studio_row_click("files_open_path", "/home/sam/a file's name.R")
+assert("studio_row_click() targets the requested input",
+       grepl("Shiny.setInputValue\\('files_open_path'", row_click))
+assert("studio_row_click() uses a priority Shiny accepts",
+       grepl("priority: 'event'", row_click))
+assert("studio_row_click() encodes a path so it cannot break the JS string",
+       grepl("%27", row_click) && grepl("%20", row_click) && !grepl("file's", row_click))
+
 # ------------------------------------------------------------------------------
 # Test 9: Bundled example scripts (samples/)
 # ------------------------------------------------------------------------------
@@ -614,7 +635,7 @@ cat("\n--- 11. Testing Repository Self-Coverage, Trace Index & Dependency Manife
 self_files <- c(
   "r_trce.R", "app.R", "R/common.R", "R/parser.R", "R/analyzer.R",
   "R/annotator.R", "R/validator.R", "R/explain.R", "R/pedagogy.R", "R/runtime.R",
-  "R/editor_ops.R", "R/studio_editor.R", "R/studio_console.R",
+  "R/editor_ops.R", "R/studio_editor.R", "R/studio_console.R", "R/studio_panes.R",
   "tests/test_r_trce.R"
 )
 
