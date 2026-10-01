@@ -77,11 +77,17 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-rparse-017` | R-TRCE Code Assistant Studio / Source Editor Pane | Two-way binding between the browser editor and the Studio's working document, plus Run / Run All / Save | `R/studio_editor.R` (`studio_editor_ui`, `studio_editor_server`) |
 | `trce-rparse-018` | R-TRCE Code Assistant Studio / Console Pane | Interactive R console sharing the editor's live session, with command history, transcript and environment reporting | `R/studio_console.R` (`studio_console_ui`, `studio_console_server`) |
 | `trce-rparse-019` | R-TRCE Code Assistant Studio / Workspace Panes | Files, Plots, Packages and Help panes plus the title-bar and status-bar chrome | `R/studio_panes.R` (`studio_files_pane_server`, `studio_plots_pane_server`, `studio_packages_pane_server`, `studio_help_pane_server`, `studio_chrome_server`) |
+| `trce-rparse-022` | R-TRCE Code Assistant Engine / Headless Worker Daemon | Long-running persistent R process executing AST analysis and live session commands over a stdio JSON-RPC bridge | `studio/server/r_worker.R` (`worker_main`) |
 
 ### 2.2 Component-level Trace Index
 
 | Trace ID | Component | Role | File (lines) |
 |----------|-----------|------|--------------|
+| `trce-worker-001` | `worker_get_root()` | utility_function | `studio/server/r_worker.R` |
+| `trce-worker-002` | `with_temp_code_file()` | utility_function | `studio/server/r_worker.R` |
+| `trce-worker-003` | `handle_worker_action()` | utility_function | `studio/server/r_worker.R` |
+| `trce-worker-004` | `worker_main()` | utility_function | `studio/server/r_worker.R` |
+| `trce-worker-005` | `interactive_guard()` | cli_entrypoint | `studio/server/r_worker.R` |
 | `trce-cli-001` | `usage()` | cli_dispatcher | `r_trce.R` (L54-L112) |
 | `trce-cli-002` | `run_doctor()` | utility_function | `r_trce.R` (L402-L480) |
 | `trce-cli-003` | `interactive_guard()` | cli_entrypoint | `r_trce.R` (L491-L493) |
@@ -309,3 +315,10 @@ explanation, AST, student studio) as tabs of the bottom panel rather than replac
 | Help pane | Shortcuts, the six questions, the vocabulary, how the panes fit together | `trce-pane-005` |
 | Splitters, theme, shortcuts | `www/rtrce-layout.js` -- browser-only, remembered in localStorage | -- |
 
+| `trce-rparse-020` | `teach.R` module | teaching_subsystem | `R/teach.R` |
+| `trce-teach-001` | `concept_tags_for_lines()` | utility_function | `R/teach.R` |
+| `trce-teach-002` | `explain_code_line()` | utility_function | `R/teach.R` |
+| `trce-teach-005` | `TEACH_ERRORS` | data_schema | `R/teach.R` |
+| `trce-teach-003` | `explain_r_error()` | utility_function | `R/teach.R` |
+| `trce-teach-004` | `describe_run()` | utility_function | `R/teach.R` |
+| `trce-rparse-021` | `studio_learn_pane_server()` | shiny_server | `R/studio_learn.R` |

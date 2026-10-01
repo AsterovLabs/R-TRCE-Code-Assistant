@@ -86,13 +86,15 @@ irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/ins
 
 ### 📦 Standalone & Offline Downloads (GitHub Releases)
 
-Pre-packaged bundles are available on the [GitHub Releases](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases) page:
+Pre-packaged bundles are published on the **[GitHub Releases](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases)** page. They come pre-built and ready to run with **both** local studios:
 
-| Operating System | Package Archive | Installation |
+| Operating System | Package Archive | Quick Launch (Zero Setup) |
 | :--- | :--- | :--- |
-| **Windows 11 / 10** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | Extract zip and double-click `install.bat` |
-| **Linux (All Distros)** | [`rtrce-code-assistant-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | Extract tarball and run `./install.sh` |
-| **macOS** | [`rtrce-code-assistant-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | Extract tarball and run `./install.sh` |
+| **🪟 Windows 11 / 10** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Unzip the download.<br>**2.** Double-click **`start_react_studio.bat`** (React Studio) or **`start_studio.bat`** (Shiny Studio). |
+| **🐧 Linux (All Distros)** | [`rtrce-code-assistant-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Extract: `tar -xzf rtrce-code-assistant-linux-all.tar.gz`<br>**2.** Run: `./start_react_studio.sh` (or `./start_studio.sh`). |
+| **🍏 macOS** | [`rtrce-code-assistant-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Extract archive.<br>**2.** Run: `./start_react_studio.sh` (or `./start_studio.sh`). |
+
+*(Optional)* You can also run `install.bat` on Windows or `./install.sh` on Linux to add `rtrce`, `rtrce-react-studio`, and `rtrce-studio` permanently to your system `PATH`.
 
 ---
 

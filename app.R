@@ -94,9 +94,13 @@ source(file.path(script_dir, "R", "pedagogy.R"))
 # IDE-style decisions, and the studio_* files the two panes that use them.
 source(file.path(script_dir, "R", "runtime.R"))
 source(file.path(script_dir, "R", "editor_ops.R"))
+# The teaching engine is shared with the CLI, so the pane and the terminal give
+# the same explanation rather than two that drift.
+source(file.path(script_dir, "R", "teach.R"))
 source(file.path(script_dir, "R", "studio_editor.R"))
 source(file.path(script_dir, "R", "studio_console.R"))
 source(file.path(script_dir, "R", "studio_panes.R"))
+source(file.path(script_dir, "R", "studio_learn.R"))
 
 # -----------------------------------------------------------------------------
 # Where the Studio listens
@@ -288,8 +292,10 @@ ui <- fluidPage(
     tags$script(src = sprintf("rtrce/codemirror/addon/edit/matchbrackets.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/addon/edit/closebrackets.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/codemirror/addon/comment/comment.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/codemirror/addon/selection/active-line.js?v=%s", ASSET_VERSION)),
     tags$script(src = sprintf("rtrce/rtrce-editor.js?v=%s", ASSET_VERSION)),
-    tags$script(src = sprintf("rtrce/rtrce-layout.js?v=%s", ASSET_VERSION))
+    tags$script(src = sprintf("rtrce/rtrce-layout.js?v=%s", ASSET_VERSION)),
+    tags$script(src = sprintf("rtrce/rtrce-palette.js?v=%s", ASSET_VERSION))
   ),
 
   # ===========================================================================
@@ -485,6 +491,12 @@ ui <- fluidPage(
           tabsetPanel(
             id = "rail_tabs",
 
+            # Learn comes first: the point of the product is teaching, and a pane
+            # that explains the line under the cursor earns the first slot.
+            tabPanel("Learn",
+              uiOutput("learn_pane_ui")
+            ),
+
             tabPanel("Environment",
               p(class = "rt-xs", style = "color: var(--rt-text-faint); margin-bottom: 8px;",
                 "Every object your code has created, refreshed after each run."),
@@ -577,12 +589,23 @@ server <- function(input, output, session) {
 
   run_code <- function(code, label = "console", from = NULL, to = NULL) {
     live <- live_session()
+
+    # Snapshot the workspace BEFORE evaluation so describe_run() can diff.
+    ws_before <- session_workspace(live)
+
     result <- session_evaluate(live, code)
 
     # Mutated in place, so the revision counter below is the signal that makes the
     # environment table and console status re-render.
     live_session(live)
     session_revision(session_revision() + 1L)
+
+    # Snapshot AFTER and generate the "What Just Happened" commentary.
+    ws_after <- session_workspace(live)
+    commentary <- tryCatch(
+      describe_run(result, before = ws_before, after = ws_after),
+      error = function(e) character(0)
+    )
 
     # Publish any plot captured by this run so the Plots pane can display it. The
     # engine stays UI-agnostic; the Studio decides how a plot reaches a browser.
@@ -615,6 +638,16 @@ server <- function(input, output, session) {
           incomplete = FALSE
         )
       }
+    }
+
+    # Append "What Just Happened" commentary as a note entry when available.
+    if (length(commentary) > 0 && !isTRUE(result$incomplete)) {
+      new_entries[[length(new_entries) + 1L]] <- list(
+        code  = NULL,
+        lines = paste0("\U0001F4A1 ", commentary),
+        kinds = rep("note", length(commentary)),
+        incomplete = FALSE
+      )
     }
 
     # Keep the transcript bounded: a loop printing in the Studio must not be able
@@ -747,6 +780,21 @@ server <- function(input, output, session) {
     select_annotatable_components(a$components)
   })
 
+  # --- GUTTER CONCEPT HINTS (wired from R/teach.R → rtrce:setGutterHints) ---
+  # Pushes pedagogical glyphs to the editor gutter whenever the parsed and
+  # analysed data change.  The JS handler is registered in www/rtrce-editor.js
+  # (line 264) and was previously unconnected.
+  observe({
+    p <- parsed_data()
+    a <- analysis_data()
+    if (is.null(p) || is.null(a)) return()
+
+    hints <- tryCatch(concept_tags_for_lines(p, a), error = function(e) list())
+    if (length(hints) > 0) {
+      session$sendCustomMessage("rtrce:setGutterHints", hints)
+    }
+  })
+
   # --- BATCH ANNOTATE BUTTON ---
   observeEvent(input$btn_batch_annotate, {
     p <- parsed_data()
@@ -873,7 +921,7 @@ server <- function(input, output, session) {
       return(div(class = "card", style = "text-align: center; padding: 40px;",
         tags$div(style = "font-size: 48px; margin-bottom: 12px;", "🎉"),
         h2("File Walkthrough & Annotation Complete!"),
-        p(style = "font-size: 16px; color: #475569; max-width: 600px; margin: 0 auto 20px;",
+        p(class = "rt-soft", style = "font-size: 16px; max-width: 600px; margin: 0 auto 20px;",
           sprintf("All %d components in '%s' have been reviewed. The file now achieves 100%% TRCE coverage with %d valid traces.",
                   total_steps, active_filename(), v$total_traces)),
         div(style = "display: flex; gap: 12px; justify-content: center; margin-bottom: 24px;",
@@ -926,11 +974,11 @@ server <- function(input, output, session) {
 
         fluidRow(
           column(6,
-            h5(style = "font-weight: 700; color: #334155;", "Component Source Code:"),
+            h5(class = "rt-heading", "Component Source Code:"),
             tags$pre(class = "code-view", comp$code),
             br(),
-            h5(style = "font-weight: 700; color: #334155;", "Architectural Context:"),
-            tags$ul(style = "font-size: 13px; color: #475569;",
+            h5(class = "rt-heading", "Architectural Context:"),
+            tags$ul(class = "rt-soft", style = "font-size: 13px;",
               tags$li(strong("Parameters: "), if (length(comp$args) > 0) paste(comp$args, collapse = ", ") else "none"),
               tags$li(strong("Calls Internal Routines: "), if (length(comp$calls_local) > 0) paste(comp$calls_local, collapse = ", ") else "none"),
               tags$li(strong("Called By: "), if (length(comp$called_by) > 0) paste(comp$called_by, collapse = ", ") else "top-level entrypoint"),
@@ -939,7 +987,7 @@ server <- function(input, output, session) {
           ),
 
           column(6,
-            h5(style = "font-weight: 700; color: #334155;", "Synthesized 6-Point TRCE Annotation (Review & Edit):"),
+            h5(class = "rt-heading", "Synthesized 6-Point TRCE Annotation (Review & Edit):"),
             textInput("step_id", "Trace ID (@trce-id):", value = auto_id),
             textInput("step_who", "Who (@trce-who):", value = auto_who),
             textAreaInput("step_what", "What (@trce-what):", value = auto_what, rows = 2),
@@ -974,10 +1022,10 @@ server <- function(input, output, session) {
     msg <- load_error()
     if (is.null(msg)) return(NULL)
 
-    div(class = "card", style = "border-left: 5px solid #ef4444; background: #fef2f2;",
-      h4(style = "margin: 0 0 6px; color: #991b1b;", "This R file could not be analysed"),
-      p(style = "margin: 0 0 8px; color: #7f1d1d; font-size: 13px;", msg),
-      tags$ul(style = "margin: 0; padding-left: 18px; color: #7f1d1d; font-size: 12px;",
+    div(class = "card rt-card-error",
+      h4(style = "margin: 0 0 6px;", "This R file could not be analysed"),
+      p(style = "margin: 0 0 8px; font-size: 13px;", msg),
+      tags$ul(style = "margin: 0; padding-left: 18px; font-size: 12px;",
         tags$li("R stops at the first syntax error, so check the line quoted above."),
         tags$li("Unbalanced brackets or quotes, or a missing close parenthesis, are the usual causes."),
         tags$li("Your code is still shown in full on the 'Annotated Code & Traces' tab.")
@@ -990,8 +1038,8 @@ server <- function(input, output, session) {
     note <- encoding_note()
     if (is.null(note)) return(NULL)
 
-    div(class = "card", style = "border-left: 5px solid #f59e0b; background: #fffbeb;",
-      p(style = "margin: 0; color: #92400e; font-size: 13px;", note)
+    div(class = "card rt-card-warn",
+      p(class = "rt-soft", style = "margin: 0; font-size: 13px;", note)
     )
   })
 
@@ -1131,33 +1179,32 @@ server <- function(input, output, session) {
     pitfalls <- detect_student_pitfalls(p, a)
 
     if (length(pitfalls) == 0) {
-      return(div(class = "card", style = "border-left: 5px solid #10b981; background: #f0fdf4;",
-        h3(style = "color: #166534; margin-top: 0;", "🎉 Clean Bill of Health!"),
-        p(style = "color: #15803d; font-size: 15px;",
+      return(div(class = "card rt-card-ok",
+        h3(style = "margin-top: 0;", "🎉 Clean Bill of Health!"),
+        p(style = "font-size: 15px;",
           sprintf("%s scanned this script and found zero common beginner traps, NA comparison errors, or quadratic copy-on-modify memory bottlenecks.", APP_NAME))
       ))
     }
 
     cards <- lapply(seq_along(pitfalls), function(i) {
       pf <- pitfalls[[i]]
-      border_col <- if (pf$severity == "warning") "#ef4444" else "#f59e0b"
-      bg_col <- if (pf$severity == "warning") "#fef2f2" else "#fffbeb"
+      severity_class <- if (pf$severity == "warning") "rt-card-error" else "rt-card-warn"
       badge_cls <- if (pf$severity == "warning") "badge-warning" else "badge-info"
 
-      div(class = "card", style = sprintf("border-left: 5px solid %s; background: %s; margin-bottom: 16px;", border_col, bg_col),
+      div(class = paste("card", severity_class), style = "margin-bottom: 16px;",
         div(style = "display: flex; justify-content: space-between; align-items: center;",
           h4(style = "margin: 0; font-weight: 700;", sprintf("%d. %s (Line %d)", i, pf$title, pf$line)),
           span(class = badge_cls, toupper(pf$severity))
         ),
-        p(style = "margin-top: 10px; color: #334155; font-size: 14px;", pf$description),
-        div(style = "background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-top: 8px;",
-          strong(style = "color: #0f172a;", "💡 Recommended Fix: "),
-          span(style = "color: #0369a1; font-family: monospace;", pf$suggestion)
+        p(class = "rt-soft", style = "margin-top: 10px; font-size: 14px;", pf$description),
+        div(class = "rt-fix-box",
+          strong("💡 Recommended Fix: "),
+          span(pf$suggestion)
         ),
         if (nzchar(pf$code_snippet)) {
           div(style = "margin-top: 8px;",
             span(class = "field-label", "Detected Code:"),
-            tags$pre(style = "background: #1e293b; color: #f8fafc; padding: 8px; border-radius: 4px; font-size: 12px; margin-top: 4px;", pf$code_snippet)
+            tags$pre(class = "rt-code-snippet", pf$code_snippet)
           )
         }
       )
@@ -1166,7 +1213,7 @@ server <- function(input, output, session) {
     tagList(
       div(style = "margin-bottom: 16px;",
         h3(style = "margin: 0 0 6px;", "Student Pitfall & Safety Audit"),
-        p(style = "color: #64748b;", sprintf("Found %d potential conceptual or memory trap(s) to review.", length(pitfalls)))
+        p(class = "rt-muted", sprintf("Found %d potential conceptual or memory trap(s) to review.", length(pitfalls)))
       ),
       cards
     )
@@ -1188,12 +1235,12 @@ server <- function(input, output, session) {
         h4("Imported Libraries & Package Primer"),
         lapply(names(primers), function(pkg) {
           info <- primers[[pkg]]
-          div(style = "border-bottom: 1px solid #e2e8f0; padding: 10px 0;",
+          div(class = "rt-pkg-item",
             div(style = "display: flex; gap: 10px; align-items: center;",
-              strong(style = "font-size: 16px; color: #0284c7;", paste0("library(", info$name, ")")),
+              strong(class = "rt-pkg-name", paste0("library(", info$name, ")")),
               span(class = "badge-info", info$domain)
             ),
-            p(style = "margin: 6px 0 0; color: #475569; font-size: 14px;", info$role)
+            p(class = "rt-pkg-role", info$role)
           )
         })
       )
@@ -1201,26 +1248,26 @@ server <- function(input, output, session) {
 
     func_cards <- div(class = "card",
       h4("Functions & Scoping Audit"),
-      p(style = "color: #64748b; font-size: 13px;", "Understanding functional building blocks and side effects:"),
+      p(class = "rt-muted", style = "font-size: 13px;", "Understanding functional building blocks and side effects:"),
       lapply(a$components, function(comp) {
         if (comp$kind != "function") return(NULL)
         is_pure <- !isTRUE(comp$has_super_assign)
-        div(style = "border-left: 4px solid #3b82f6; padding: 8px 12px; margin-bottom: 12px; background: #f8fafc;",
+        div(class = "rt-func-card",
           h5(style = "margin: 0 0 4px; font-weight: 700;", sprintf("%s(%s)", comp$name, paste(comp$args, collapse = ", "))),
           div(style = "display: flex; gap: 8px;",
             span(class = if (is_pure) "badge-success" else "badge-warning", if (is_pure) "Pure Function" else "Impure (<<-)"),
             span(class = "badge-secondary", comp$archetype)
           ),
-          p(style = "margin: 6px 0 0; color: #64748b; font-size: 12px;",
+          p(class = "rt-muted", style = "margin: 6px 0 0; font-size: 12px;",
             sprintf("Defined on lines %d-%d.%s", comp$line1, comp$line2,
                     if (length(comp$calls_local) > 0) sprintf(" Calls local function(s): %s.", paste(comp$calls_local, collapse = ", ")) else ""))
         )
       })
     )
 
-    trce_rubric <- div(class = "card", style = "background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white;",
-      h4(style = "color: white;", "The 6-Point TRCE Inquiry Rubric"),
-      p(style = "color: #94a3b8; font-size: 13px;", "How to deconstruct any piece of code like a computer scientist:"),
+    trce_rubric <- div(class = "card rt-rubric-card",
+      h4("The 6-Point TRCE Inquiry Rubric"),
+      p(style = "font-size: 13px;", "How to deconstruct any piece of code like a computer scientist:"),
       tags$ul(style = "line-height: 1.8; font-size: 13px;",
         tags$li(strong("WHO: "), "Who executes this code? (User script, ggplot renderer, or Shiny server)"),
         tags$li(strong("WHAT: "), "What exact mechanical operation is executed? (Filtering, joining, modeling)"),
@@ -1243,21 +1290,21 @@ server <- function(input, output, session) {
     pipe_card <- if (length(pipes) == 0) {
       div(class = "card",
         h4("Data Pipelines (|>, %>%)"),
-        p(style = "color: #64748b;", "No piped expressions (|>, %>%) detected in this file.")
+        p(class = "rt-muted", "No piped expressions (|>, %>%) detected in this file.")
       )
     } else {
       div(class = "card",
         h4("Data Pipeline Flow Inspector"),
-        p(style = "color: #64748b; font-size: 13px;", "Step-by-step unrolling of piped operations:"),
+        p(class = "rt-muted", style = "font-size: 13px;", "Step-by-step unrolling of piped operations:"),
         lapply(seq_along(pipes), function(i) {
           pipe <- pipes[[i]]
-          div(style = "margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;",
-            h5(style = "margin: 0 0 10px; color: #1e293b;", sprintf("Pipeline #%d (starts at line %d with source: '%s')", i, pipe$line1, pipe$source)),
+          div(class = "rt-pipe-card",
+            h5(style = "margin: 0 0 10px;", sprintf("Pipeline #%d (starts at line %d with source: '%s')", i, pipe$line1, pipe$source)),
             lapply(seq_along(pipe$stages), function(s_idx) {
               stg <- pipe$stages[[s_idx]]
-              div(style = "margin-left: 15px; border-left: 3px solid #0284c7; padding-left: 10px; margin-bottom: 8px;",
-                strong(style = "color: #0369a1;", sprintf("Step %d: %s()", s_idx, stg$fn)),
-                p(style = "margin: 2px 0 0; color: #475569; font-size: 13px;", stg$explanation)
+              div(class = "rt-pipe-step",
+                strong(sprintf("Step %d: %s()", s_idx, stg$fn)),
+                p(style = "margin: 2px 0 0; font-size: 13px;", stg$explanation)
               )
             })
           )
@@ -1268,16 +1315,16 @@ server <- function(input, output, session) {
     formula_card <- if (length(formulas) == 0) {
       div(class = "card",
         h4("Statistical Model Formulas (~)"),
-        p(style = "color: #64748b;", "No statistical formula specifications (~) detected in this file.")
+        p(class = "rt-muted", "No statistical formula specifications (~) detected in this file.")
       )
     } else {
       div(class = "card",
         h4("Statistical Model Deconstructor"),
-        p(style = "color: #64748b; font-size: 13px;", "Translating R model formulas into statistical equations:"),
+        p(class = "rt-muted", style = "font-size: 13px;", "Translating R model formulas into statistical equations:"),
         lapply(formulas, function(f) {
-          div(style = "border-left: 4px solid #8b5cf6; background: #faf5ff; padding: 12px; margin-bottom: 12px; border-radius: 4px;",
-            h5(style = "margin: 0 0 6px; font-family: monospace; font-size: 15px; color: #581c87;", f$formula),
-            tags$ul(style = "font-size: 13px; color: #334155; margin-bottom: 0;",
+          div(class = "rt-card-learn", style = "padding: 12px; margin-bottom: 12px;",
+            h5(style = "margin: 0 0 6px; font-family: var(--rt-font-mono); font-size: 15px;", f$formula),
+            tags$ul(class = "rt-soft", style = "font-size: 13px; margin-bottom: 0;",
               tags$li(strong("Response Variable (Y): "), f$response_variable),
               tags$li(strong("Predictors (X): "), paste(f$rhs_terms, collapse = ", ")),
               tags$li(strong("Interaction Terms: "), if (f$has_interaction) "Present (: or *)" else "None (additive effects only)"),
@@ -1299,19 +1346,19 @@ server <- function(input, output, session) {
 
     div(class = "card",
       h4("Self-Study Comprehension Quiz"),
-      p(style = "color: #64748b; font-size: 13px;", "Test your understanding of this script's architecture, dependencies, and scoping:"),
+      p(class = "rt-muted", style = "font-size: 13px;", "Test your understanding of this script's architecture, dependencies, and scoping:"),
       lapply(seq_along(questions), function(i) {
         q <- questions[[i]]
-        div(style = "border-bottom: 1px solid #e2e8f0; padding: 14px 0;",
-          h5(style = "font-weight: 700; color: #0f172a; margin: 0 0 8px;", sprintf("Question %d: %s", i, q$question)),
+        div(class = "rt-quiz-q",
+          h5(style = "margin: 0 0 8px;", sprintf("Question %d: %s", i, q$question)),
           tags$ul(style = "list-style-type: none; padding-left: 4px;",
             lapply(q$options, function(opt) {
-              tags$li(style = "margin-bottom: 4px; font-size: 13px; color: #334155;", opt)
+              tags$li(style = "margin-bottom: 4px; font-size: 13px;", opt)
             })
           ),
           tags$details(style = "margin-top: 8px; font-size: 13px;",
-            tags$summary(style = "cursor: pointer; color: #2563eb; font-weight: 600;", "👉 Show Answer & Explanation"),
-            div(style = "margin-top: 6px; padding: 10px; background: #eff6ff; border-radius: 6px; color: #1e3a8a;",
+            tags$summary("👉 Show Answer & Explanation"),
+            div(class = "rt-answer-card",
               strong(sprintf("Correct Answer: %s", q$correct_answer)),
               p(style = "margin: 4px 0 0;", q$explanation)
             )
@@ -1347,6 +1394,8 @@ server <- function(input, output, session) {
       if (is.null(a)) character(0) else a$imports
     }),
     validation = validation_data,
+    parsed     = parsed_data,
+    analysis   = analysis_data,
     touch      = function() session_revision(session_revision() + 1L),
     restart    = function() {
       live <- live_session()
@@ -1363,6 +1412,7 @@ server <- function(input, output, session) {
   studio_plots_pane_server(input, output, session, studio_state)
   studio_packages_pane_server(input, output, session, studio_state)
   studio_help_pane_server(input, output, session)
+  studio_learn_pane_server(input, output, session, studio_state)
   studio_chrome_server(input, output, session, studio_state)
 }
 
@@ -1379,7 +1429,34 @@ app <- shinyApp(ui = ui, server = server)
 #  * @trce-how Checks interactive() state, retrieves commandArgs(trailingOnly = TRUE), and invokes main router
 #  */
 if (!interactive()) {
-  port <- as.integer(Sys.getenv("PORT", "8083"))
+  is_port_in_use <- function(p, check_host = "127.0.0.1") {
+    tryCatch({
+      con <- suppressWarnings(socketConnection(check_host, port = p, open = "r", timeout = 0.2))
+      close(con)
+      TRUE
+    }, error = function(e) FALSE)
+  }
+
+  requested_port <- as.integer(Sys.getenv("PORT", "8083"))
+  port <- requested_port
+  explicit_port <- nzchar(Sys.getenv("PORT", ""))
+
+  if (is_port_in_use(port, "127.0.0.1")) {
+    if (!explicit_port) {
+      # Automatically find the next open port so users never get crashed by a previous session
+      for (candidate in seq(requested_port + 1L, requested_port + 20L)) {
+        if (!is_port_in_use(candidate, "127.0.0.1")) {
+          message(sprintf("[i] Default port %d is already in use (another instance may be running).", requested_port))
+          message(sprintf("    Automatically switching to available port %d.", candidate))
+          port <- candidate
+          break
+        }
+      }
+    } else {
+      message(sprintf("[!] Warning: Explicitly configured PORT=%d is already in use.", port))
+    }
+  }
+
   # Localhost by default: this page runs R code, so binding it to a network is a
   # deliberate choice (HOST=... or RTRCE_ALLOW_REMOTE=1), announced below.
   host <- BIND$host

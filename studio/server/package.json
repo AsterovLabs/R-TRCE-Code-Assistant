@@ -1,0 +1,18 @@
+{
+  "name": "r-trce-studio-server",
+  "version": "1.0.0",
+  "description": "R-TRCE Code Assistant Local Studio Backend Daemon",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_worker.js"
+  },
+  "keywords": ["r", "trce", "ast", "studio", "editor"],
+  "author": "Asterov Labs",
+  "license": "SEE LICENSE IN LICENSE",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

@@ -11,5 +11,12 @@ tmp/
 *.Rcheck/
 .DS_Store
 
+# Release builds at repository root
+/dist/
+
 # Plots published for the browser at runtime (regenerated on every run)
 www/plots/*.png
+
+# Node & package dependencies
+node_modules/
+**/node_modules/

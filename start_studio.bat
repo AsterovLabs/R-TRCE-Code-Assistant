@@ -15,7 +15,7 @@ set "RSCRIPT_BIN=Rscript.exe"
 where Rscript >nul 2>nul
 if %errorlevel% neq 0 (
     :: Try standard Program Files path
-    for /d %%D in ("C:\Program Files\R\R-*") do (
+    for /d %%D in ("%ProgramFiles%\R\R-*") do (
         if exist "%%D\bin\Rscript.exe" set "RSCRIPT_BIN=%%D\bin\Rscript.exe"
     )
 )

@@ -17,6 +17,24 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build React Studio & Prepare Server
+        run: |
+          echo "Building React Studio Client..."
+          cd studio/client
+          npm ci --ignore-scripts || npm install
+          npm run build
+          cd ../..
+
+          echo "Installing Studio Backend Dependencies..."
+          cd studio/server
+          npm ci --omit=dev || npm install --omit=dev
+          cd ../..
+
       - name: Create Release Bundles
         run: |
           VERSION="${GITHUB_REF_NAME:-v1.0.0}"
@@ -26,63 +44,76 @@ jobs:
 
           # 1. Linux Bundle
           mkdir -p dist/linux/rtrce-code-assistant
-          cp -r r_trce.R app.R start_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R dist/linux/rtrce-code-assistant/
-          chmod +x dist/linux/rtrce-code-assistant/r_trce.R dist/linux/rtrce-code-assistant/app.R dist/linux/rtrce-code-assistant/start_studio.sh dist/linux/rtrce-code-assistant/install.sh
+          cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples www studio dist/linux/rtrce-code-assistant/
+          chmod +x dist/linux/rtrce-code-assistant/r_trce.R dist/linux/rtrce-code-assistant/app.R dist/linux/rtrce-code-assistant/start_studio.sh dist/linux/rtrce-code-assistant/start_react_studio.sh dist/linux/rtrce-code-assistant/install.sh
           tar -czf dist/rtrce-code-assistant-linux-all.tar.gz -C dist/linux rtrce-code-assistant
 
           # 2. macOS Bundle
           mkdir -p dist/macos/rtrce-code-assistant
-          cp -r r_trce.R app.R start_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R dist/macos/rtrce-code-assistant/
-          chmod +x dist/macos/rtrce-code-assistant/r_trce.R dist/macos/rtrce-code-assistant/app.R dist/macos/rtrce-code-assistant/start_studio.sh dist/macos/rtrce-code-assistant/install.sh
+          cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples www studio dist/macos/rtrce-code-assistant/
+          chmod +x dist/macos/rtrce-code-assistant/r_trce.R dist/macos/rtrce-code-assistant/app.R dist/macos/rtrce-code-assistant/start_studio.sh dist/macos/rtrce-code-assistant/start_react_studio.sh dist/macos/rtrce-code-assistant/install.sh
           tar -czf dist/rtrce-code-assistant-macos-all.tar.gz -C dist/macos rtrce-code-assistant
 
-          # 3. Windows 10 / 11 Bundle
+          # 3. Windows 10 & 11 Bundle
           mkdir -p dist/windows/rtrce-code-assistant
-          cp -r r_trce.R app.R start_studio.bat install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R dist/windows/rtrce-code-assistant/
+          cp -r r_trce.R app.R start_studio.bat start_react_studio.bat start_react_studio.ps1 install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R samples www studio dist/windows/rtrce-code-assistant/
           zip -r dist/rtrce-code-assistant-windows-all.zip dist/windows/rtrce-code-assistant
 
           # Standalone installer scripts and license for direct download
           cp install.sh dist/install.sh
           cp install.ps1 dist/install.ps1
           cp install.bat dist/install.bat
+          cp start_react_studio.bat dist/start_react_studio.bat
+          cp start_react_studio.sh dist/start_react_studio.sh
           cp LICENSE dist/LICENSE
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            dist/rtrce-code-assistant-windows-all.zip
             dist/rtrce-code-assistant-linux-all.tar.gz
             dist/rtrce-code-assistant-macos-all.tar.gz
-            dist/rtrce-code-assistant-windows-all.zip
             dist/install.sh
             dist/install.ps1
             dist/install.bat
+            dist/start_react_studio.bat
+            dist/start_react_studio.sh
           name: "R-TRCE Code Assistant ${{ github.ref_name }}"
           draft: false
           prerelease: false
           body: |
             ## R-TRCE Code Assistant Release ${{ github.ref_name }}
             
-            Multi-platform release of R-TRCE Code Assistant: Architectural analysis, AST comprehension, 6-point TRCE telemetry, and student pedagogical suite.
+            Multi-platform distribution of R-TRCE Code Assistant with **both** local studios pre-bundled and ready to run:
+            - **New React Local Studio**: Powered by Monaco Editor, Asterov Catppuccin theme, live TRCE telemetry badges, AST archetype explorer, interactive R REPL, and plot gallery.
+            - **Interactive Shiny Studio**: The classic Shiny web workspace.
+            - **CLI Router**: Complete architectural analysis, 6-point TRCE doc-comment synthesizer, and pitfall sentinel.
             
-            ### ⚡ 1-Minute Quick Install
-
+            ---
+            
+            ### 🚀 Standalone Releases (Easiest & Most Direct)
+            
+            Download the pre-packaged bundle for your platform below — no build steps or git clone needed:
+            
+            | Platform | Download | Instructions |
+            | :--- | :--- | :--- |
+            | **🪟 Windows 10 & 11** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-windows-all.zip) | **1.** Unzip the folder.<br>**2.** Double-click **`start_react_studio.bat`** (or `start_studio.bat`). |
+            | **🐧 Linux** | [`rtrce-code-assistant-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-linux-all.tar.gz) | **1.** Extract archive: `tar -xzf rtrce-code-assistant-linux-all.tar.gz`<br>**2.** Run: `./start_react_studio.sh` |
+            | **🍏 macOS** | [`rtrce-code-assistant-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-macos-all.tar.gz) | **1.** Extract archive.<br>**2.** Run: `./start_react_studio.sh` |
+            
+            ---
+            
+            ### ⚡ 1-Minute Terminal Quick Install
+            
             #### 🐧 Linux & 🍏 macOS
             ```bash
             curl -fsSL https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/install.sh | bash
             ```
-
+            Once installed, run `rtrce-react-studio` or `rtrce-studio`.
+            
             #### 🪟 Windows 11 & Windows 10 (PowerShell)
             ```powershell
             irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/install.ps1 | iex
             ```
-
-            ---
-
-            ### 📦 Standalone Downloads
-            
-            | Platform | Download | Instructions |
-            | :--- | :--- | :--- |
-            | **Windows 10 & 11** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-windows-all.zip) | Unzip and double-click `install.bat` or `start_studio.bat` |
-            | **Linux (All Distros)** | [`rtrce-code-assistant-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-linux-all.tar.gz) | Extract and run `./install.sh` |
-            | **macOS** | [`rtrce-code-assistant-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/download/${{ github.ref_name }}/rtrce-code-assistant-macos-all.tar.gz) | Extract and run `./install.sh` |
+            Once installed, run `rtrce-react-studio` or `rtrce-studio`.

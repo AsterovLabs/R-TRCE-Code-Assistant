@@ -154,6 +154,7 @@
       indentWithTabs: false,
       matchBrackets: true,
       autoCloseBrackets: !consoleMode,
+      styleActiveLine: !consoleMode,
       // Reserved now so the teaching layer can attach per-line hints later
       // without restructuring the editor.
       gutters: consoleMode ? [] : ["CodeMirror-linenumbers", "rtrce-hints"],

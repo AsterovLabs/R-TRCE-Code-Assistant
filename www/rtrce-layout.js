@@ -129,6 +129,7 @@
 
   // --- Keyboard shortcut sheet ---------------------------------------------
   var SHORTCUTS = [
+    ["Ctrl / Cmd + Shift + P", "Command Palette"],
     ["Ctrl / Cmd + Enter", "Run the selection, or the statement at the cursor"],
     ["Ctrl / Cmd + Shift + Enter", "Run the whole file"],
     ["Ctrl / Cmd + S", "Save back to the file you opened"],
@@ -177,6 +178,15 @@
     if (close) close.addEventListener("click", hide);
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape") { hide(); return; }
+
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        if (window.rtrce && window.rtrce.openPalette) {
+          window.rtrce.openPalette();
+        }
+        return;
+      }
+
       var target = event.target || {};
       var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || "") ||
                    target.isContentEditable ||

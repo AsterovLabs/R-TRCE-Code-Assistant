@@ -48,17 +48,8 @@ studio_editor_ui <- function(initial_code = "", filename = "sample.R") {
       .rtrce-editor-shell { display: flex; flex-direction: column; height: 100%; }
       .rtrce-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
       .rtrce-toolbar .btn { font-weight: 600; }
-      .rtrce-status { margin-left: auto; font-size: 12px; color: #64748b; font-family: 'JetBrains Mono', Menlo, Consolas, monospace; }
       .rtrce-editor-host { flex: 1 1 auto; min-height: 320px; }
-      .CodeMirror { height: 100%; min-height: 320px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 13px; }
-      .CodeMirror-gutters { background: #f8fafc; border-right: 1px solid #e2e8f0; }
-      .rtrce-busy { opacity: 0.65; }
-      .CodeMirror .rtrce-ran { background: #ecfdf5; }
-      .rtrce-hint { cursor: help; font-size: 11px; padding: 0 2px; }
-      .rtrce-hint-info { color: #3b82f6; }
-      .rtrce-hint-warning { color: #f59e0b; }
-      .rtrce-hint-tip { color: #10b981; }
-      textarea.rtrce-editor { width: 100%; font-family: 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 13px; }
+      textarea.rtrce-editor { width: 100%; }
     ")),
     div(class = "card rtrce-editor-shell",
       div(class = "rtrce-toolbar",
@@ -68,7 +59,7 @@ studio_editor_ui <- function(initial_code = "", filename = "sample.R") {
         span(class = "rtrce-status", textOutput("editor_status", inline = TRUE))
       ),
       div(class = "rtrce-editor-host",
-        p(style = "margin: 0 0 4px; font-size: 12px; color: #475569; font-family: monospace;", filename),
+        p(class = "rt-mono-soft", style = "margin: 0 0 4px; font-size: 12px;", filename),
         # Exactly one child. htmltools indents *each* child of a textarea, so a
         # second child (a filename, say) would be injected into the document as
         # indented text -- it appeared as a stray first line in the editor.

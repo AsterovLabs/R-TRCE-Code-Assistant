@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+ * Asterov Design System: Catppuccin Mocha (Dark) & Latte (Light)
+ * ============================================================================= */
+
+:root,
+[data-rtrce-theme="mocha"] {
+  --rt-crust:      #11111b;
+  --rt-mantle:     #181825;
+  --rt-base:       #1e1e2e;
+  --rt-surface-0:  #313244;
+  --rt-surface-1:  #45475a;
+  --rt-surface-2:  #585b70;
+  --rt-overlay-0:  #6c7086;
+  --rt-overlay-1:  #7f849c;
+  --rt-overlay-2:  #9399b2;
+
+  --rt-text:       #cdd6f4;
+  --rt-text-soft:  #bac2de;
+  --rt-text-muted: #a6adc8;
+  --rt-text-faint: #7f849c;
+
+  --rt-mauve:      #cba6f7;
+  --rt-blue:       #89b4fa;
+  --rt-teal:       #94e2d5;
+  --rt-green:      #a6e3a1;
+  --rt-yellow:     #f9e2af;
+  --rt-peach:      #fab387;
+  --rt-maroon:     #eba0ac;
+  --rt-red:        #f38ba8;
+}
+
+[data-rtrce-theme="latte"] {
+  --rt-crust:      #dce0e8;
+  --rt-mantle:     #e6e9ef;
+  --rt-base:       #eff1f5;
+  --rt-surface-0:  #ccd0da;
+  --rt-surface-1:  #bcc0cc;
+  --rt-surface-2:  #acb0be;
+  --rt-overlay-0:  #9ca0b0;
+  --rt-overlay-1:  #8c8fa1;
+  --rt-overlay-2:  #7c7f93;
+
+  --rt-text:       #4c4f69;
+  --rt-text-soft:  #5c5f77;
+  --rt-text-muted: #6c6f85;
+  --rt-text-faint: #8c8fa1;
+
+  --rt-mauve:      #8839ef;
+  --rt-blue:       #1e66f5;
+  --rt-teal:       #179299;
+  --rt-green:      #40a02b;
+  --rt-yellow:     #df8e1d;
+  --rt-peach:      #fe640b;
+  --rt-maroon:     #e64553;
+  --rt-red:        #d20f39;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--rt-mantle);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rt-surface-0);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rt-surface-1);
+}
+
+/* Asterov Brand Gradient */
+.asterov-gradient-text {
+  background: linear-gradient(135deg, var(--rt-mauve) 0%, var(--rt-blue) 50%, var(--rt-teal) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.asterov-gradient-border {
+  border-image: linear-gradient(135deg, var(--rt-mauve), var(--rt-blue), var(--rt-teal)) 1;
+}
+
+/* Gutter Glyphs for TRCE */
+.trce-gutter-glyph {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-left: 3px;
+  margin-top: 3px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.trce-gutter-glyph.valid {
+  background-color: var(--rt-teal);
+  color: var(--rt-teal);
+}
+
+.trce-gutter-glyph.incomplete {
+  background-color: var(--rt-yellow);
+  color: var(--rt-yellow);
+}
+
+.trce-gutter-glyph.invalid {
+  background-color: var(--rt-red);
+  color: var(--rt-red);
+}

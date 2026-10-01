@@ -37,7 +37,24 @@ fi
 
 echo "Using R: $R_BIN"
 
-export PORT="${PORT:-8083}"
+if [ -z "${PORT:-}" ] || [ "$PORT" = "8083" ]; then
+  CHECK_PORT="${PORT:-8083}"
+  if curl -s -m 1 "http://127.0.0.1:${CHECK_PORT}/" >/dev/null 2>&1; then
+    echo "=================================================================="
+    echo "  R-TRCE Studio is already running on http://127.0.0.1:${CHECK_PORT}"
+    echo "  Opening in your default browser..."
+    echo "=================================================================="
+    if command -v garcon-url-handler >/dev/null 2>&1; then
+      garcon-url-handler "http://localhost:${CHECK_PORT}" >/dev/null 2>&1 || true
+    elif command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "http://localhost:${CHECK_PORT}" >/dev/null 2>&1 || true
+    elif command -v open >/dev/null 2>&1; then
+      open "http://localhost:${CHECK_PORT}" >/dev/null 2>&1 || true
+    fi
+    exit 0
+  fi
+fi
+
 # The Studio runs the user's R code, so app.R binds it to localhost unless asked
 # otherwise. Remote access is opt-in here rather than the default: it is announced
 # below and again in a red banner inside the Studio itself.

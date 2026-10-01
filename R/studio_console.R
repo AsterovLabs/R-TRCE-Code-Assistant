@@ -47,15 +47,7 @@ studio_console_ui <- function() {
   tagList(
     tags$style(HTML("
       .rtrce-console-shell { display: flex; flex-direction: column; height: 100%; }
-      .rtrce-transcript { background: #0f172a; color: #e2e8f0; border-radius: 6px; padding: 12px;
-                          font-family: 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 12.5px;
-                          height: 260px; overflow-y: auto; white-space: pre-wrap; }
-      .rtrce-transcript .rtrce-echo { color: #7dd3fc; }
-      .rtrce-transcript .rtrce-out { color: #e2e8f0; }
-      .rtrce-transcript .rtrce-msg { color: #a5b4fc; }
-      .rtrce-transcript .rtrce-warn { color: #fbbf24; }
-      .rtrce-transcript .rtrce-err { color: #fca5a5; }
-      .rtrce-transcript .rtrce-note { color: #94a3b8; font-style: italic; }
+      .rtrce-transcript { height: 260px; overflow-y: auto; white-space: pre-wrap; }
       .ConsoleMirror .CodeMirror { min-height: 64px; height: 64px; }
     ")),
     div(class = "card rtrce-console-shell",

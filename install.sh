@@ -237,6 +237,14 @@ if [ -x "$RSCRIPT_BIN" ] || command -v "$RSCRIPT_BIN" >/dev/null 2>&1; then
   fi
 fi
 
+# 4b. Optional: Pre-install React Studio backend dependencies if Node.js & npm are present
+if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+  if [ -d "$INSTALL_DIR/studio/server" ] && [ ! -d "$INSTALL_DIR/studio/server/node_modules" ]; then
+    echo "Installing React Studio backend dependencies..."
+    (cd "$INSTALL_DIR/studio/server" && npm install --silent --omit=dev) 2>/dev/null || true
+  fi
+fi
+
 # 5. Create Executable Wrappers in ~/.local/bin
 echo "Creating CLI and Studio executable wrappers..."
 
@@ -315,16 +323,23 @@ echo "=================================================================="
 exec "$R_BIN" "$INSTALL_DIR/app.R"
 WRAPPER_EOF
 
+# rtrce-react-studio wrapper (React Local Studio)
+cat << 'WRAPPER_EOF' > "$BIN_DIR/rtrce-react-studio"
+#!/usr/bin/env bash
+INSTALL_DIR="__INSTALL_DIR__"
+exec bash "$INSTALL_DIR/start_react_studio.sh" "$@"
+WRAPPER_EOF
+
 # Substitute actual paths — handle GNU sed (Linux) vs BSD sed (macOS)
 if [ "$PLATFORM" = "macOS" ]; then
-  sed -i '' "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
+  sed -i '' "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio" "$BIN_DIR/rtrce-react-studio"
   sed -i '' "s|__RSCRIPT_BIN__|$RSCRIPT_BIN|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
 else
-  sed -i "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
+  sed -i "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio" "$BIN_DIR/rtrce-react-studio"
   sed -i "s|__RSCRIPT_BIN__|$RSCRIPT_BIN|g" "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
 fi
 
-chmod +x "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio"
+chmod +x "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio" "$BIN_DIR/rtrce-react-studio"
 
 # Legacy command names kept as aliases so existing habits and scripts keep working
 ln -sf "rtrce"        "$BIN_DIR/r-trce"
@@ -371,7 +386,8 @@ echo -e "  ${BOLD}rtrce pitfalls script.R${NC}     Quick beginner pitfall sentin
 echo -e "  ${BOLD}rtrce quiz script.R${NC}         Generate student comprehension quiz"
 echo -e "  ${BOLD}rtrce explain script.R${NC}      Full architectural explanation"
 echo -e "  ${BOLD}rtrce help${NC}                  Every command and option"
-echo -e "  ${BOLD}rtrce-studio${NC}                Launch interactive web studio"
+echo -e "  ${BOLD}rtrce-react-studio${NC}          Launch React local studio (Monaco & Asterov UI)"
+echo -e "  ${BOLD}rtrce-studio${NC}                Launch interactive Shiny web studio"
 echo ""
 echo -e "${YELLOW}Note:${NC} the older names 'r-trce' and 'r-trce-studio' still work as aliases."
 echo ""

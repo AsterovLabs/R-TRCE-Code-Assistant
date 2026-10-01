@@ -215,6 +215,21 @@ if ($rscriptBin -and ($rscriptBin -ne "Rscript.exe" -or (Get-Command $rscriptBin
     }
 }
 
+# 3b. Optional: Pre-install React Studio backend dependencies if Node.js & npm are present
+$NpmCmd = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
+if (-not $NpmCmd) { $NpmCmd = Get-Command "npm" -ErrorAction SilentlyContinue }
+if ($NpmCmd) {
+    $ServerModules = Join-Path $InstallDir "studio\server\node_modules"
+    if (-not (Test-Path $ServerModules)) {
+        Write-Host "Installing React Studio backend dependencies..." -ForegroundColor Cyan
+        try {
+            Push-Location (Join-Path $InstallDir "studio\server")
+            & $NpmCmd.Source install --silent --omit=dev 2>$null
+            Pop-Location
+        } catch {}
+    }
+}
+
 # 4. Generate Windows CMD Executable Wrappers
 Write-Host "Generating CLI and Studio wrappers in $binDir..."
 
@@ -271,6 +286,14 @@ start http://%HOST%:%PORT%
 "@
 Set-Content -Path "$binDir\rtrce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
 
+# rtrce-react-studio.cmd (React Local Studio)
+$rTrceReactStudioCmd = @"
+@echo off
+setlocal
+call "$InstallDir\start_react_studio.bat" %*
+"@
+Set-Content -Path "$binDir\rtrce-react-studio.cmd" -Value $rTrceReactStudioCmd -Encoding ASCII
+
 # Legacy alias for the Studio launcher
 Set-Content -Path "$binDir\r-trce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
 
@@ -297,7 +320,7 @@ if ($currentUserPath -notlike "*$binDir*") {
 try {
     $wshShell = New-Object -ComObject WScript.Shell
     
-    # Desktop Shortcut
+    # Desktop Shortcut (Shiny Studio)
     $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
     if ($desktopPath -and (Test-Path $desktopPath)) {
         $shortcutDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE Code Assistant Studio.lnk")
@@ -305,6 +328,12 @@ try {
         $shortcutDesktop.WorkingDirectory = $InstallDir
         $shortcutDesktop.Description = "R-TRCE Code Assistant Interactive Studio & Guided Walkthrough"
         $shortcutDesktop.Save()
+
+        $shortcutReactDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE React Studio.lnk")
+        $shortcutReactDesktop.TargetPath = "$binDir\rtrce-react-studio.cmd"
+        $shortcutReactDesktop.WorkingDirectory = $InstallDir
+        $shortcutReactDesktop.Description = "R-TRCE Code Assistant React Local Studio (Monaco Editor)"
+        $shortcutReactDesktop.Save()
     }
     
     # Start Menu Shortcut
@@ -315,6 +344,12 @@ try {
         $shortcutStart.WorkingDirectory = $InstallDir
         $shortcutStart.Description = "R-TRCE Code Assistant Interactive Studio & Guided Walkthrough"
         $shortcutStart.Save()
+
+        $shortcutReactStart = $wshShell.CreateShortcut("$startMenuPrograms\R-TRCE React Studio.lnk")
+        $shortcutReactStart.TargetPath = "$binDir\rtrce-react-studio.cmd"
+        $shortcutReactStart.WorkingDirectory = $InstallDir
+        $shortcutReactStart.Description = "R-TRCE Code Assistant React Local Studio (Monaco Editor)"
+        $shortcutReactStart.Save()
     }
     
     Write-Host "Created Desktop & Start Menu shortcuts." -ForegroundColor Green
@@ -334,9 +369,10 @@ Quick Start Commands (in PowerShell or CMD):
   rtrce quiz script.R         Generate comprehension quiz
   rtrce explain script.R      Architectural explanation & dependency flow
   rtrce help                  Every command and option
-  rtrce-studio                Launch interactive web studio
+  rtrce-react-studio          Launch React local studio (Monaco & Asterov UI)
+  rtrce-studio                Launch interactive Shiny web studio
 
-You can also launch "R-TRCE Code Assistant Studio" directly from your Desktop or Start Menu!
+You can also launch "R-TRCE React Studio" or "R-TRCE Code Assistant Studio" directly from your Desktop or Start Menu!
 
 NOTE: The older names 'r-trce' and 'r-trce-studio' still work as aliases.
 NOTE: You may need to restart your terminal for PATH changes to take effect.

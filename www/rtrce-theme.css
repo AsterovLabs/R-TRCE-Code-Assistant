@@ -679,10 +679,320 @@ kbd, .rtrce-kbd {
 .rt-row-static:hover { background: rgba(49,50,68,.35); box-shadow: none; }
 
 /* -----------------------------------------------------------------------------
+ * Editor & Console Panes
+ * -------------------------------------------------------------------------- */
+
+/* Editor pane — colours that were previously inline in studio_editor.R */
+.rtrce-status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--rt-text-faint);
+  font-family: var(--rt-font-mono);
+}
+.rtrce-app .CodeMirror {
+  height: 100%; min-height: 320px;
+  border: 1px solid var(--rt-border-plain);
+  border-radius: var(--rt-radius-sm);
+  font-family: var(--rt-font-mono);
+  font-size: 13px;
+}
+.rtrce-app .CodeMirror-gutters {
+  background: var(--rt-surface-0);
+  border-right: 1px solid var(--rt-border-plain);
+}
+.rtrce-busy { opacity: 0.65; }
+.rtrce-app .CodeMirror .rtrce-ran {
+  background: color-mix(in srgb, var(--rt-ok) 15%, transparent);
+}
+.rtrce-hint { cursor: help; font-size: 11px; padding: 0 2px; }
+.rtrce-hint-info { color: var(--rt-info); }
+.rtrce-hint-warning { color: var(--rt-warn); }
+.rtrce-hint-tip { color: var(--rt-ok); }
+
+/* Console pane — colours that were previously inline in studio_console.R */
+.rtrce-transcript {
+  background: var(--rt-crust);
+  color: var(--rt-text-soft);
+  border-radius: var(--rt-radius-sm);
+  padding: 12px;
+  font-family: var(--rt-font-mono);
+  font-size: 12.5px;
+}
+.rtrce-transcript .rtrce-echo { color: var(--rt-sapphire); }
+.rtrce-transcript .rtrce-out  { color: var(--rt-text-soft); }
+.rtrce-transcript .rtrce-msg  { color: var(--rt-blue); }
+.rtrce-transcript .rtrce-warn { color: var(--rt-yellow); }
+.rtrce-transcript .rtrce-err  { color: var(--rt-red); }
+.rtrce-transcript .rtrce-note { color: var(--rt-text-muted); font-style: italic; }
+
+/* -----------------------------------------------------------------------------
+ * 7b. Semantic component cards (Phase 1 design-system compliance)
+ * -------------------------------------------------------------------------- */
+
+/* Cards with accent left-border for status/meaning */
+.rt-card-error {
+  background: color-mix(in srgb, var(--rt-error) 8%, var(--rt-base));
+  border-left: 5px solid var(--rt-error);
+}
+.rt-card-error h4, .rt-card-error strong { color: var(--rt-error); }
+.rt-card-error p, .rt-card-error li { color: var(--rt-text-soft); }
+
+.rt-card-warn {
+  background: color-mix(in srgb, var(--rt-warn) 8%, var(--rt-base));
+  border-left: 5px solid var(--rt-warn);
+}
+.rt-card-warn p { color: var(--rt-text-soft); }
+
+.rt-card-ok {
+  background: color-mix(in srgb, var(--rt-ok) 8%, var(--rt-base));
+  border-left: 5px solid var(--rt-ok);
+}
+.rt-card-ok h3 { color: var(--rt-ok); }
+.rt-card-ok p { color: var(--rt-text-soft); }
+
+.rt-card-info {
+  background: color-mix(in srgb, var(--rt-info) 8%, var(--rt-base));
+  border-left: 4px solid var(--rt-info);
+}
+
+.rt-card-learn {
+  background: color-mix(in srgb, var(--rt-learn) 8%, var(--rt-base));
+  border-left: 4px solid var(--rt-learn);
+}
+.rt-card-learn h5 { color: var(--rt-learn); }
+.rt-card-learn p, .rt-card-learn li { color: var(--rt-text-soft); }
+
+/* Code snippet dark card (for detected code blocks) */
+.rt-code-snippet {
+  background: var(--rt-crust);
+  color: var(--rt-text);
+  padding: 8px;
+  border-radius: var(--rt-radius-sm);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Fix suggestion box */
+.rt-fix-box {
+  background: var(--rt-surface-0);
+  border: 1px solid var(--rt-border);
+  border-radius: var(--rt-radius-sm);
+  padding: 12px;
+  margin-top: 8px;
+}
+.rt-fix-box strong { color: var(--rt-text); }
+.rt-fix-box span { color: var(--rt-info); font-family: var(--rt-font-mono); }
+
+/* Quiz answer reveal card */
+.rt-answer-card {
+  background: color-mix(in srgb, var(--rt-info) 10%, var(--rt-base));
+  border-radius: var(--rt-radius-sm);
+  padding: 10px;
+  margin-top: 6px;
+  color: var(--rt-text);
+}
+
+/* Rubric card — dark gradient */
+.rt-rubric-card {
+  background: linear-gradient(135deg, var(--rt-crust) 0%, var(--rt-mantle) 100%);
+  color: var(--rt-text);
+}
+.rt-rubric-card h4 { color: var(--rt-text); }
+.rt-rubric-card p { color: var(--rt-text-muted); }
+.rt-rubric-card li { color: var(--rt-text-soft); }
+
+/* Pipeline step indicators */
+.rt-pipe-step {
+  margin-left: 15px;
+  border-left: 3px solid var(--rt-info);
+  padding-left: 10px;
+  margin-bottom: 8px;
+}
+.rt-pipe-step strong { color: var(--rt-info); }
+.rt-pipe-step p { color: var(--rt-text-soft); }
+
+/* Pipeline container */
+.rt-pipe-card {
+  margin-bottom: 20px;
+  border: 1px solid var(--rt-border);
+  border-radius: var(--rt-radius);
+  padding: 14px;
+}
+.rt-pipe-card h5 { color: var(--rt-text); }
+
+/* Function audit card */
+.rt-func-card {
+  border-left: 4px solid var(--rt-info);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--rt-surface-0);
+}
+.rt-func-card h5 { color: var(--rt-text); }
+.rt-func-card p { color: var(--rt-text-faint); }
+
+/* Quiz question dividers */
+.rt-quiz-q {
+  border-bottom: 1px solid var(--rt-border-plain);
+  padding: 14px 0;
+}
+.rt-quiz-q h5 { color: var(--rt-text); font-weight: 700; }
+.rt-quiz-q li { color: var(--rt-text-soft); }
+.rt-quiz-q summary { cursor: pointer; color: var(--rt-info); font-weight: 600; }
+
+/* Section heading labels */
+.rt-heading { font-weight: 700; color: var(--rt-text); }
+.rt-muted { color: var(--rt-text-faint); }
+.rt-soft { color: var(--rt-text-soft); }
+.rt-mono-soft { color: var(--rt-text-soft); font-family: var(--rt-font-mono); }
+
+/* Package primer */
+.rt-pkg-item {
+  border-bottom: 1px solid var(--rt-border-plain);
+  padding: 10px 0;
+}
+.rt-pkg-name { font-size: 16px; color: var(--rt-info); }
+.rt-pkg-role { margin: 6px 0 0; color: var(--rt-text-soft); font-size: 14px; }
+
+/* -----------------------------------------------------------------------------
+ * 7c. Command palette (Phase 4)
+ * -------------------------------------------------------------------------- */
+
+.rtrce-palette-backdrop {
+  position: fixed; inset: 0; z-index: 9998;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 18vh;
+  animation: rtrce-palette-in 150ms ease-out;
+}
+@keyframes rtrce-palette-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.rtrce-palette {
+  width: 520px; max-height: 420px;
+  background: var(--rt-mantle);
+  border: 1px solid var(--rt-border-strong);
+  border-radius: var(--rt-radius-lg);
+  box-shadow: var(--rt-glow-accent);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  animation: rtrce-palette-card 200ms ease-out;
+}
+@keyframes rtrce-palette-card {
+  from { opacity: 0; transform: translateY(-12px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rtrce-palette-input {
+  width: 100%; border: none; outline: none;
+  background: transparent; color: var(--rt-text);
+  font-family: var(--rt-font-sans);
+  font-size: 15px; padding: 16px 20px;
+  border-bottom: 1px solid var(--rt-border);
+}
+.rtrce-palette-input::placeholder { color: var(--rt-text-faint); }
+.rtrce-palette-results {
+  overflow-y: auto; flex: 1 1 auto;
+  padding: 6px;
+}
+.rtrce-palette-group {
+  font-size: 11px; font-weight: 700;
+  color: var(--rt-text-faint);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 8px 14px 4px;
+}
+.rtrce-palette-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-radius: var(--rt-radius-sm);
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--rt-text-soft);
+  transition: background 80ms;
+}
+.rtrce-palette-item:hover,
+.rtrce-palette-item.active {
+  background: var(--rt-grad-soft);
+  color: var(--rt-text);
+}
+.rtrce-palette-keys {
+  font-family: var(--rt-font-mono);
+  font-size: 11px;
+  color: var(--rt-text-faint);
+  background: var(--rt-surface-0);
+  padding: 2px 8px;
+  border-radius: var(--rt-radius-pill);
+  border: 1px solid var(--rt-border);
+}
+.rtrce-palette-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--rt-text-faint);
+  font-size: 13px;
+}
+
+/* -----------------------------------------------------------------------------
+ * 7d. Interaction polish — Phase 3 (micro-animations & visual feedback)
+ * -------------------------------------------------------------------------- */
+
+/* 3A: Execution wave — a smooth teal pulse dissolves over executed lines */
+@keyframes rtrce-run-wave {
+  0%   { background: color-mix(in srgb, var(--rt-teal) 25%, transparent); }
+  100% { background: transparent; }
+}
+.rtrce-app .CodeMirror .rtrce-ran {
+  animation: rtrce-run-wave 800ms ease-out forwards;
+}
+
+/* 3B: Active line highlight — subtle tinted background on cursor line */
+.rtrce-app .CodeMirror-activeline-background {
+  background: color-mix(in srgb, var(--rt-mauve) 6%, transparent);
+}
+.rtrce-app .CodeMirror-activeline-gutter {
+  background: color-mix(in srgb, var(--rt-mauve) 10%, transparent);
+}
+
+/* 3B: Smooth caret motion — cursor glides instead of teleporting */
+.rtrce-app .CodeMirror-cursor {
+  transition: left 80ms ease-out, top 80ms ease-out;
+}
+
+/* 3E: Skeleton loading states — pulsing placeholder for computing panes */
+@keyframes rtrce-skeleton {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.7; }
+}
+.rt-skeleton {
+  background: var(--rt-surface-0);
+  border-radius: var(--rt-radius-sm);
+  animation: rtrce-skeleton 1.5s ease-in-out infinite;
+}
+.rt-skeleton-line {
+  height: 14px;
+  margin: 8px 0;
+  border-radius: 4px;
+  background: var(--rt-surface-1);
+  animation: rtrce-skeleton 1.5s ease-in-out infinite;
+}
+.rt-skeleton-line:nth-child(odd) { width: 85%; }
+.rt-skeleton-line:nth-child(even) { width: 60%; }
+
+/* "What Just Happened" commentary in the console transcript */
+.rtrce-transcript .rtrce-note {
+  color: var(--rt-text-muted);
+  font-style: italic;
+  border-left: 2px solid color-mix(in srgb, var(--rt-learn) 40%, transparent);
+  padding-left: 8px;
+  margin: 4px 0;
+}
+
+/* -----------------------------------------------------------------------------
  * 8. Notifications, scrollbars
  * -------------------------------------------------------------------------- */
 
-#shiny-notification-panel { top: auto; bottom: 40px; right: 14px; width: 380px; }
+#shiny-notification-panel { top: auto; bottom: calc(var(--rt-statusbar-h) + 8px); right: 14px; width: 380px; }
 .shiny-notification {
   background: var(--rt-mantle) !important;
   color: var(--rt-text);
@@ -692,6 +1002,12 @@ kbd, .rtrce-kbd {
   box-shadow: var(--rt-glow);
   font-size: 12.5px;
   padding: 11px 13px;
+  transform: translateY(10px);
+  opacity: 0;
+  animation: rtrce-toast-in 300ms ease-out forwards;
+}
+@keyframes rtrce-toast-in {
+  to { transform: translateY(0); opacity: 1; }
 }
 .shiny-notification-error   { border-left-color: var(--rt-red) !important; }
 .shiny-notification-warning { border-left-color: var(--rt-warn) !important; }

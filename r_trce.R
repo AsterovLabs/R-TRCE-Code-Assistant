@@ -42,6 +42,8 @@ source(file.path(script_dir, "R", "validator.R"))
 source(file.path(script_dir, "R", "explain.R"))
 source(file.path(script_dir, "R", "pedagogy.R"))
 source(file.path(script_dir, "R", "runtime.R"))
+source(file.path(script_dir, "R", "editor_ops.R"))
+source(file.path(script_dir, "R", "teach.R"))
 
 # /**
 #  * @trce-id trce-cli-001
@@ -81,9 +83,10 @@ COMMANDS
     tutor <file>                    Guided walkthrough of the code, component by component
     pitfalls <file>                 Flag common beginner traps and memory bottlenecks
     quiz <file> [--md]              Generate a comprehension quiz from this script
+    teach <file> [line]             Plain-language concept breakdown, or deep-dive on one line
 
   TOOLS
-    studio [port]                   Open the interactive web Studio (default port: 8083)
+    studio [--react] [port]         Open interactive web Studio (default: Shiny port 8083, --react port 8084)
 
 ANNOTATE OPTIONS
   --inplace, -i                   Overwrite the target file with annotated code
@@ -140,7 +143,7 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 
   # Validate the command before touching the filesystem: a typo should be
   # reported as a typo, not as a missing file.
-  known_commands <- c("parse", "explain", "run", "tutor", "pitfalls", "quiz", "annotate",
+  known_commands <- c("parse", "explain", "run", "tutor", "teach", "pitfalls", "quiz", "annotate",
                       "check", "export-traces", "export_traces", "studio", "doctor")
   if (!cmd %in% known_commands) {
     cat(sprintf("Unknown command: '%s'\n\n", cmd), file = stderr())
@@ -158,6 +161,26 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   }
 
   if (cmd == "studio") {
+    is_react <- any(args %in% c("--react", "-r"))
+    if (is_react) {
+      launcher <- file.path(script_dir, if (.Platform$OS.type == "windows") "start_react_studio.bat" else "start_react_studio.sh")
+      if (file.exists(launcher)) {
+        port_arg <- args[!args %in% c("--react", "-r")][1]
+        if (!is.na(port_arg) && !is.na(as.integer(port_arg))) {
+          Sys.setenv(PORT = port_arg)
+        }
+        if (.Platform$OS.type == "windows") {
+          system2("cmd.exe", c("/c", shQuote(launcher)))
+        } else {
+          system2("bash", shQuote(launcher))
+        }
+        quit(status = 0)
+      } else {
+        cat(sprintf("Error: React launcher '%s' not found.\n", launcher), file = stderr())
+        quit(status = 1)
+      }
+    }
+
     app_file <- file.path(script_dir, "app.R")
     if (!file.exists(app_file)) {
       cat(sprintf("Error: app.R not found in '%s'\n", script_dir), file = stderr())
@@ -248,7 +271,9 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       cat("================================================================================\n")
 
       code <- paste(read_source_lines(target_file)$lines, collapse = "\n")
+      ws_before <- session_workspace(session)
       result <- session_evaluate(session, code)
+      ws_after <- session_workspace(session)
 
       for (entry in result$entries) {
         cat(sprintf("> %s\n", entry$code))
@@ -277,15 +302,97 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       }
       cat("--------------------------------------------------------------------------------\n")
 
+      commentary <- tryCatch(describe_run(result, before = ws_before, after = ws_after), error = function(e) character(0))
+      if (length(commentary) > 0) {
+        cat("  Educational commentary:\n")
+        for (note in commentary) {
+          cat(sprintf("   * %s\n", note))
+        }
+        cat("--------------------------------------------------------------------------------\n")
+      }
+
       if (!result$ok) {
-        cat("  The run stopped at the first error, exactly as the console would.\n")
-        cat(sprintf("  %d expression(s) completed before it.\n", length(result$entries) - 1L))
-        cat("\n")
+        cat("  [!] The run stopped at an error, exactly as the console would:\n")
+        for (entry in result$entries) {
+          if (!is.null(entry$error)) {
+            diagnosis <- explain_r_error(entry$error)
+            if (!is.null(diagnosis)) {
+              cat(sprintf("\n  DIAGNOSIS: %s\n", diagnosis$plain))
+              if (length(diagnosis$causes) > 0) {
+                cat("  COMMON CAUSES:\n")
+                for (cause in diagnosis$causes) {
+                  cat(sprintf("   - %s\n", cause))
+                }
+              }
+              cat(sprintf("  HOW TO FIX:\n   -> %s\n\n", diagnosis$fix))
+            }
+          }
+        }
         quit(status = 1)
       }
 
       cat("  Run completed without errors.\n")
       cat(sprintf("\nNext: Rscript r_trce.R explain \"%s\"   (what all of that was for)\n", target_file))
+    },
+
+    teach = {
+      target_line <- if (length(options_args) > 0) suppressWarnings(as.integer(options_args[1])) else NA_integer_
+      parsed <- parse_r_file(target_file)
+      analysis <- analyze_r_file(parsed)
+
+      if (!is.na(target_line)) {
+        explained <- explain_code_line(parsed, analysis, target_line)
+        cat("================================================================================\n")
+        cat(sprintf("  LINE %d: %s\n", explained$line, basename(target_file)))
+        cat("================================================================================\n")
+        cat(sprintf("  Code:     %s\n", explained$code))
+        cat(sprintf("  What:     %s\n", explained$what))
+        if (!is.null(explained$statement) && nzchar(explained$statement$note %||% "")) {
+          cat(sprintf("  Context:  %s\n", explained$statement$note))
+        }
+        if (!is.null(explained$component)) {
+          comp <- explained$component
+          cat(sprintf("  Part of:  %s() [lines %d-%d, archetype: %s]\n",
+                      comp$name, comp$line1, comp$line2,
+                      if (identical(comp$kind, "function")) comp$archetype else comp$kind))
+        }
+        if (length(explained$pitfalls) > 0) {
+          cat("\n  Pitfalls on this line:\n")
+          for (p in explained$pitfalls) {
+            cat(sprintf("   * [%s] %s: %s\n     Suggestion: %s\n",
+                        toupper(p$severity), p$title, p$description, p$suggestion))
+          }
+        }
+        if (length(explained$concepts) > 0) {
+          cat("\n  Concepts exercised:\n")
+          for (c in explained$concepts) {
+            cat(sprintf("   * %s: %s\n     Hint: %s\n", c$name, c$why, c$hint))
+          }
+        }
+        if (length(explained$tokens) > 0) {
+          cat("\n  Tokens:\n")
+          tok_str <- vapply(explained$tokens, function(t) sprintf("%s (%s)", t$text, t$meaning), character(1))
+          cat(paste("   ", paste(tok_str, collapse = ", "), "\n"))
+        }
+        cat("================================================================================\n")
+      } else {
+        cat("================================================================================\n")
+        cat(sprintf("  TEACHING WALKTHROUGH: %s (%d lines)\n", basename(target_file), parsed$total_lines))
+        cat("================================================================================\n")
+        tags <- concept_tags_for_lines(parsed, analysis)
+        if (length(tags) == 0) {
+          cat("  No special educational concepts or pitfalls tagged for this file.\n")
+        } else {
+          cat("  Key concepts and structural landmarks in this file:\n\n")
+          for (item in tags) {
+            code_line <- if (item$line <= length(parsed$raw_lines)) trimws(parsed$raw_lines[item$line]) else ""
+            cat(sprintf("  Line %-4d [%-8s] %s\n", item$line, item$kind, item$text))
+            if (nzchar(code_line)) cat(sprintf("             Code: %s\n", code_line))
+          }
+          cat("\n  To inspect any line in detail: rtrce teach <file> <line-number>\n")
+        }
+        cat("================================================================================\n")
+      }
     },
 
     tutor = {
@@ -445,7 +552,7 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 
     {
       cat(sprintf("Unknown command: '%s'\n\n", cmd), file = stderr())
-      known <- c("parse", "explain", "tutor", "pitfalls", "quiz", "annotate", "check",
+      known <- c("parse", "explain", "run", "tutor", "teach", "pitfalls", "quiz", "annotate", "check",
                  "export-traces", "studio", "doctor", "help")
       near <- agrep(cmd, known, max.distance = 0.4, value = TRUE)
       if (length(near) > 0) {
@@ -497,7 +604,7 @@ run_doctor <- function() {
               if (has_json) "OK (jsonlite available)" else "MISSING - 'export-traces' unavailable"))
   cat(sprintf("  Web Studio:      %s\n",
               if (has_shiny) "OK (shiny available)" else "MISSING - 'studio' unavailable"))
-  cat("  Core modules:    common.R, parser.R, analyzer.R, annotator.R, validator.R, explain.R, pedagogy.R [LOADED]\n")
+  cat("  Core modules:    common.R, parser.R, analyzer.R, annotator.R, validator.R, explain.R, pedagogy.R, runtime.R, teach.R [LOADED]\n")
   cat(sprintf("  Required:        %s   (manifest: R/common.R)\n", paste(req, collapse = ", ")))
   if (length(opt) > 0) {
     cat(sprintf("  Optional:        %s%s\n", paste(opt, collapse = ", "),

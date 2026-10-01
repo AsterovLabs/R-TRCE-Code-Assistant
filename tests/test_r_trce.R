@@ -38,6 +38,7 @@ source(file.path(root_dir, "R", "pedagogy.R"))
 source(file.path(root_dir, "R", "runtime.R"))
 source(file.path(root_dir, "R", "editor_ops.R"))
 source(file.path(root_dir, "R", "studio_panes.R"))
+source(file.path(root_dir, "R", "teach.R"))
 
 # Test harness helpers
 pass_count <- 0
@@ -628,6 +629,70 @@ assert("format_console_entry() orders output, messages, warnings and the error",
                  c("out", "msg", "Warning: warn", "Error: err")))
 
 # ------------------------------------------------------------------------------
+# Test 10b: Testing Teaching Subsystem (R/teach.R)
+# ------------------------------------------------------------------------------
+cat("\n--- 10b. Testing Teaching Subsystem (R/teach.R) ---\n")
+
+err_closure <- explain_r_error("object of type 'closure' is not subsettable")
+assert("explain_r_error() translates closure subsetting error",
+       !is.null(err_closure) && grepl("function was used where data was expected", err_closure$plain))
+
+err_dollar <- explain_r_error("Error: $ operator is invalid for atomic vectors")
+assert("explain_r_error() translates atomic vector dollar operator error",
+       !is.null(err_dollar) && grepl("only works on lists and data frames", err_dollar$plain))
+
+err_missing_arg <- explain_r_error("argument \"x\" is missing, with no default")
+assert("explain_r_error() translates missing argument error",
+       !is.null(err_missing_arg) && grepl("without an argument", err_missing_arg$plain))
+
+err_subscript <- explain_r_error("subscript out of bounds")
+assert("explain_r_error() translates subscript out of bounds error",
+       !is.null(err_subscript) && grepl("at a position that does not exist", err_subscript$plain))
+
+dummy_code_teach <- c(
+  "# A header comment",
+  "val <- TRUE",
+  "num <- 42",
+  "for (i in 1:length(val)) { print(i) }"
+)
+writeLines(dummy_code_teach, dummy_file)
+p_teach <- parse_r_file(dummy_file)
+a_teach <- analyze_r_file(p_teach)
+
+line1_exp <- explain_code_line(p_teach, a_teach, 1)
+assert("explain_code_line() identifies comment lines correctly",
+       grepl("This is a comment", line1_exp$what))
+
+line2_exp <- explain_code_line(p_teach, a_teach, 2)
+assert("explain_code_line() distinguishes boolean TRUE from numbers",
+       any(vapply(line2_exp$tokens, function(t) t$meaning == "a boolean (TRUE/FALSE)", logical(1))))
+
+line3_exp <- explain_code_line(p_teach, a_teach, 3)
+assert("explain_code_line() identifies numbers correctly",
+       any(vapply(line3_exp$tokens, function(t) t$meaning == "a number", logical(1))))
+
+line4_exp <- explain_code_line(p_teach, a_teach, 4)
+assert("explain_code_line() detects 1:length(x) pitfall on target line",
+       length(line4_exp$pitfalls) > 0 && any(vapply(line4_exp$pitfalls, function(p) grepl("1:length", p$title), logical(1))))
+
+tags_teach <- concept_tags_for_lines(p_teach, a_teach)
+assert("concept_tags_for_lines() indexes concepts and structure",
+       length(tags_teach) > 0)
+
+rt_teach_session <- new_r_session()
+ws_b <- session_workspace(rt_teach_session)
+res_assign <- session_evaluate(rt_teach_session, "a <- 42")
+ws_a <- session_workspace(rt_teach_session)
+desc_assign <- describe_run(res_assign, before = ws_b, after = ws_a)
+assert("describe_run() describes new workspace objects created by assignment",
+       any(grepl("New in the workspace", desc_assign)))
+
+res_recycle <- session_evaluate(rt_teach_session, "1:5 * 2")
+desc_recycle <- describe_run(res_recycle)
+assert("describe_run() describes vectorisation and recycling for multi-element values",
+       any(grepl("recycling", desc_recycle)) && any(grepl("element by element", desc_recycle)))
+
+# ------------------------------------------------------------------------------
 # Test 11: Repository self-coverage, trace index and dependency-manifest integrity
 # ------------------------------------------------------------------------------
 cat("\n--- 11. Testing Repository Self-Coverage, Trace Index & Dependency Manifest ---\n")
@@ -636,7 +701,7 @@ self_files <- c(
   "r_trce.R", "app.R", "R/common.R", "R/parser.R", "R/analyzer.R",
   "R/annotator.R", "R/validator.R", "R/explain.R", "R/pedagogy.R", "R/runtime.R",
   "R/editor_ops.R", "R/studio_editor.R", "R/studio_console.R", "R/studio_panes.R",
-  "tests/test_r_trce.R"
+  "R/teach.R", "R/studio_learn.R", "studio/server/r_worker.R", "tests/test_r_trce.R"
 )
 
 cov_ok <- vapply(self_files, function(f) {

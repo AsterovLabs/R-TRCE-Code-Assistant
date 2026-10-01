@@ -176,14 +176,24 @@ detect_student_pitfalls <- function(parsed_obj, analysis) {
 
   # 7. Package masking collisions (e.g. MASS and dplyr both imported)
   if (all(c("MASS", "dplyr") %in% analysis$imports)) {
+    # Point at the line where the collision actually becomes possible: the later
+    # of the two attach calls. This was hard-coded to line 1, which named a
+    # comment -- so the Studio's gutter and Learn pane had nothing useful to show.
+    mass_line  <- grep("^\\s*(library|require)\\s*\\(\\s*['\"]?MASS['\"]?\\s*\\)", raw_lines)
+    dplyr_line <- grep("^\\s*(library|require)\\s*\\(\\s*['\"]?dplyr['\"]?\\s*\\)", raw_lines)
+    attach_line <- if (length(mass_line) > 0 && length(dplyr_line) > 0) {
+      as.integer(max(mass_line[1], dplyr_line[1]))
+    } else {
+      1L
+    }
     add_pitfall(
       type = "namespace_masking",
       severity = "warning",
-      line = 1,
+      line = attach_line,
       title = "Package Masking Conflict: MASS & dplyr",
       description = "Both 'MASS' and 'dplyr' export a 'select()' function. If MASS is loaded after dplyr, calls to 'select()' will fail with an error about unused arguments.",
       suggestion = "Disambiguate explicitly with 'dplyr::select()' or load packages using 'conflicted::conflict_prefer(\"select\", \"dplyr\")'.",
-      code_snippet = "library(MASS) vs library(dplyr)"
+      code_snippet = if (attach_line <= length(raw_lines)) trimws(raw_lines[attach_line]) else "library(MASS) vs library(dplyr)"
     )
   }
 
