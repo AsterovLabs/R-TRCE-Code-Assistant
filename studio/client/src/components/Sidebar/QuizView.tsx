@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { HelpCircle, Sparkles, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { QuizQuestion } from '../../types';
+import { ensureArray } from '../../utils/array';
 
 interface QuizViewProps {
   quiz: QuizQuestion[];
@@ -19,6 +20,8 @@ export const QuizView: React.FC<QuizViewProps> = ({
 }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+
+  const quizList = ensureArray(quiz);
 
   const handleSelect = (questionId: number, optionIdx: number) => {
     setSelectedAnswers(prev => ({ ...prev, [questionId]: optionIdx }));
@@ -50,7 +53,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
           <div className="h-40 flex items-center justify-center text-xs text-rt-text-faint">
             <div className="animate-spin mr-2">⟳</div> Synthesizing comprehension quiz...
           </div>
-        ) : quiz.length === 0 ? (
+        ) : quizList.length === 0 ? (
           <div className="h-40 flex flex-col items-center justify-center p-6 text-center text-xs text-rt-text-muted">
             <HelpCircle className="w-8 h-8 mb-2 opacity-40 text-rt-mauve" />
             <p>Generate a quiz from the current file's functions, formulas, and pipelines.</p>
@@ -64,7 +67,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between text-rt-text-muted">
-              <span>{quiz.length} Questions</span>
+              <span>{quizList.length} Questions</span>
               <button
                 onClick={handleReset}
                 className="flex items-center space-x-1 text-[11px] hover:text-rt-text transition"
@@ -74,10 +77,11 @@ export const QuizView: React.FC<QuizViewProps> = ({
               </button>
             </div>
 
-            {quiz.map((q, idx) => {
+            {quizList.map((q, idx) => {
               const selectedIdx = selectedAnswers[q.id];
               const isRevealed = revealed[q.id];
               const isCorrect = selectedIdx === q.correct_index;
+              const options = ensureArray(q.options);
 
               return (
                 <div
@@ -90,7 +94,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
                   </div>
 
                   <div className="space-y-1.5">
-                    {q.options.map((opt, optIdx) => {
+                    {options.map((opt, optIdx) => {
                       const isChosen = selectedIdx === optIdx;
                       let btnStyle = 'bg-rt-crust/60 hover:bg-rt-surface-0 border-rt-surface-1 text-rt-text-soft';
 

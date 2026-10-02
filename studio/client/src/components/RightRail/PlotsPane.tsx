@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { Image as ImageIcon, Download, Maximize2, Trash2, X } from 'lucide-react';
 import { PlotItem } from '../../types';
+import { ensureArray } from '../../utils/array';
 
 interface PlotsPaneProps {
   plots: PlotItem[];
@@ -13,6 +14,7 @@ interface PlotsPaneProps {
 
 export const PlotsPane: React.FC<PlotsPaneProps> = ({ plots, onClearPlots }) => {
   const [activePlot, setActivePlot] = useState<PlotItem | null>(null);
+  const safePlots = ensureArray(plots);
 
   const handleDownload = (plot: PlotItem) => {
     const a = document.createElement('a');
@@ -30,8 +32,8 @@ export const PlotsPane: React.FC<PlotsPaneProps> = ({ plots, onClearPlots }) => 
           <span>Plots Gallery</span>
         </div>
         <div className="flex items-center space-x-1">
-          <span className="font-mono text-rt-mauve font-bold">{plots.length}</span>
-          {plots.length > 0 && onClearPlots && (
+          <span className="font-mono text-rt-mauve font-bold">{safePlots.length}</span>
+          {safePlots.length > 0 && onClearPlots && (
             <button
               onClick={onClearPlots}
               className="p-1 rounded hover:bg-rt-surface-0 text-rt-text-faint hover:text-rt-text transition"
@@ -44,7 +46,7 @@ export const PlotsPane: React.FC<PlotsPaneProps> = ({ plots, onClearPlots }) => 
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {plots.length === 0 ? (
+        {safePlots.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center p-6 text-center text-xs text-rt-text-muted">
             <ImageIcon className="w-8 h-8 mb-2 opacity-30 text-rt-blue" />
             <p>No plots rendered yet.</p>
@@ -53,7 +55,7 @@ export const PlotsPane: React.FC<PlotsPaneProps> = ({ plots, onClearPlots }) => 
             </p>
           </div>
         ) : (
-          plots.map((plot, idx) => (
+          safePlots.map((plot, idx) => (
             <div
               key={plot.id || idx}
               className="p-2 rounded-lg bg-rt-surface-0/60 border border-rt-surface-1 group relative overflow-hidden"

@@ -103,26 +103,57 @@ if [ -n "$RSCRIPT_BIN" ]; then
   echo -e "${GREEN}Found!${NC} ($R_VER at $RSCRIPT_BIN)"
 else
   echo -e "${YELLOW}Not detected.${NC}"
-  echo -e "\n${YELLOW}[!] R is required for R-TRCE Code Assistant to execute.${NC}"
-  echo "Please install R using your system package manager:"
-  if [ "$PLATFORM" = "macOS" ]; then
-    echo "  brew install r"
-  elif command -v apt-get >/dev/null 2>&1; then
-    echo "  sudo apt update && sudo apt install -y r-base"
-  elif command -v dnf >/dev/null 2>&1; then
-    echo "  sudo dnf install -y R"
-  elif command -v pacman >/dev/null 2>&1; then
-    echo "  sudo pacman -S r"
-  elif command -v apk >/dev/null 2>&1; then
-    echo "  sudo apk add R R-dev"
-  else
-    echo "  Visit https://cran.r-project.org to download R for your system."
+  AUTO_INSTALLED=false
+  if command -v sudo >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      echo -e "\n${BOLD}Would you like this installer to automatically install R for you via apt?${NC}"
+      if prompt_yn "Install R (r-base, r-base-dev) now? (Y/n) " "y"; then
+        echo "Running: sudo apt update && sudo apt install -y r-base r-base-dev"
+        sudo apt update && sudo apt install -y r-base r-base-dev || true
+        AUTO_INSTALLED=true
+      fi
+    elif command -v dnf >/dev/null 2>&1; then
+      echo -e "\n${BOLD}Would you like this installer to automatically install R for you via dnf?${NC}"
+      if prompt_yn "Install R now? (Y/n) " "y"; then
+        sudo dnf install -y R || true
+        AUTO_INSTALLED=true
+      fi
+    elif command -v pacman >/dev/null 2>&1; then
+      echo -e "\n${BOLD}Would you like this installer to automatically install R for you via pacman?${NC}"
+      if prompt_yn "Install R now? (Y/n) " "y"; then
+        sudo pacman -S --noconfirm r || true
+        AUTO_INSTALLED=true
+      fi
+    fi
+    if [ "$AUTO_INSTALLED" = true ] && command -v Rscript >/dev/null 2>&1; then
+      RSCRIPT_BIN="$(command -v Rscript)"
+      R_VER="$("$RSCRIPT_BIN" --version 2>&1 | head -n 1)"
+      echo -e "${GREEN}R installed successfully!${NC} ($R_VER)"
+    fi
   fi
-  echo ""
-  if ! prompt_yn "Continue installation anyway? (y/N) " "n"; then
-    exit 1
+
+  if [ -z "$RSCRIPT_BIN" ]; then
+    echo -e "\n${YELLOW}[!] R is required for R-TRCE Code Assistant to execute.${NC}"
+    echo "Please install R using your system package manager:"
+    if [ "$PLATFORM" = "macOS" ]; then
+      echo "  brew install r"
+    elif command -v apt-get >/dev/null 2>&1; then
+      echo "  sudo apt update && sudo apt install -y r-base"
+    elif command -v dnf >/dev/null 2>&1; then
+      echo "  sudo dnf install -y R"
+    elif command -v pacman >/dev/null 2>&1; then
+      echo "  sudo pacman -S r"
+    elif command -v apk >/dev/null 2>&1; then
+      echo "  sudo apk add R R-dev"
+    else
+      echo "  Visit https://cran.r-project.org to download R for your system."
+    fi
+    echo ""
+    if ! prompt_yn "Continue installation anyway? (y/N) " "n"; then
+      exit 1
+    fi
+    RSCRIPT_BIN="Rscript"
   fi
-  RSCRIPT_BIN="Rscript"
 fi
 
 # 3. Download or Copy Repository
@@ -267,60 +298,29 @@ exec "$R_BIN" "$INSTALL_DIR/r_trce.R" "$@"
 WRAPPER_EOF
 
 # rtrce-studio wrapper (interactive Studio)
+# rtrce-studio wrapper (interactive Studio - defaults to modern local desktop IDE)
 cat << 'WRAPPER_EOF' > "$BIN_DIR/rtrce-studio"
 #!/usr/bin/env bash
 INSTALL_DIR="__INSTALL_DIR__"
 R_BIN="__RSCRIPT_BIN__"
 
+for arg in "$@"; do
+  if [ "$arg" = "--shiny" ] || [ "$arg" = "-s" ]; then
+    if [ ! -x "$R_BIN" ] && command -v Rscript >/dev/null 2>&1; then
+      R_BIN="$(command -v Rscript)"
+    fi
+    exec "$R_BIN" "$INSTALL_DIR/app.R"
+  fi
+done
+
+if [ -f "$INSTALL_DIR/start_react_studio.sh" ]; then
+  exec bash "$INSTALL_DIR/start_react_studio.sh" "$@"
+fi
+
 if [ ! -x "$R_BIN" ] && command -v Rscript >/dev/null 2>&1; then
   R_BIN="$(command -v Rscript)"
 fi
-
-if [ ! -x "$R_BIN" ]; then
-  echo "Error: Rscript not found. Please install R or ensure it is on your PATH." >&2
-  exit 1
-fi
-
-PORT="${PORT:-8083}"
-HOST="${HOST:-0.0.0.0}"
-
-# Auto-detect IP addresses on Linux/Chromebook/container
-IP_LIST="127.0.0.1 localhost"
-if command -v hostname >/dev/null 2>&1; then
-  HOST_IPS="$(hostname -I 2>/dev/null || true)"
-  [ -n "$HOST_IPS" ] && IP_LIST="$IP_LIST $HOST_IPS"
-fi
-
-echo "=================================================================="
-echo "  Starting R-TRCE Code Assistant Interactive Studio"
-echo "=================================================================="
-echo "  Listening on: http://${HOST}:${PORT}"
-echo ""
-echo "  Open your browser to any of the following URLs:"
-echo "   -> http://localhost:${PORT}"
-echo "   -> http://127.0.0.1:${PORT}"
-for ip in $HOST_IPS; do
-  [ "$ip" != "127.0.0.1" ] && echo "   -> http://${ip}:${PORT}"
-done
-if [ -d /dev/vsock ] || [ -f /run/systemd/container ] || [ -d /mnt/chromeos ]; then
-  echo ""
-  echo "  [Chromebook / ChromeOS / Baguette Tip]:"
-  echo "   -> In Chrome browser: http://penguin.linux.test:${PORT}"
-fi
-echo "=================================================================="
-
-# Try opening browser in background (suppress noise if no display)
-(sleep 1.5 && (
-  if command -v garcon-url-handler >/dev/null 2>&1; then
-    garcon-url-handler "http://localhost:${PORT}" >/dev/null 2>&1 || true
-  elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "http://localhost:${PORT}" >/dev/null 2>&1 || true
-  elif command -v open >/dev/null 2>&1; then
-    open "http://localhost:${PORT}" >/dev/null 2>&1 || true
-  fi
-)) &
-
-exec "$R_BIN" "$INSTALL_DIR/app.R"
+exec "$R_BIN" "$INSTALL_DIR/app.R" "$@"
 WRAPPER_EOF
 
 # rtrce-react-studio wrapper (React Local Studio)
@@ -344,6 +344,42 @@ chmod +x "$BIN_DIR/rtrce" "$BIN_DIR/rtrce-studio" "$BIN_DIR/rtrce-react-studio"
 # Legacy command names kept as aliases so existing habits and scripts keep working
 ln -sf "rtrce"        "$BIN_DIR/r-trce"
 ln -sf "rtrce-studio" "$BIN_DIR/r-trce-studio"
+
+# 5b. Create Desktop Entry & Application Launcher (Linux)
+if [ "$PLATFORM" = "Linux" ]; then
+  APP_DIR="$HOME/.local/share/applications"
+  ICON_PATH="$INSTALL_DIR/www/brand/asterov-icon-256.png"
+  if [ ! -f "$ICON_PATH" ]; then
+    ICON_PATH="$INSTALL_DIR/www/brand/asterov-icon.png"
+  fi
+  
+  if mkdir -p "$APP_DIR" 2>/dev/null; then
+    cat << DESKTOP_EOF > "$APP_DIR/rtrce-studio.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=R-TRCE Code Assistant
+GenericName=R Code Analysis & Studio
+Comment=Architectural Comprehension, TRCE Telemetry & Student Studio
+Exec=$BIN_DIR/rtrce-studio
+Icon=$ICON_PATH
+Terminal=false
+Categories=Development;IDE;Education;
+StartupNotify=true
+DESKTOP_EOF
+    chmod +x "$APP_DIR/rtrce-studio.desktop"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+    fi
+    echo -e "${GREEN}Created application launcher:${NC} $APP_DIR/rtrce-studio.desktop"
+  fi
+
+  if [ -d "$HOME/Desktop" ]; then
+    cp "$APP_DIR/rtrce-studio.desktop" "$HOME/Desktop/R-TRCE Studio.desktop" 2>/dev/null || true
+    chmod +x "$HOME/Desktop/R-TRCE Studio.desktop" 2>/dev/null || true
+    echo -e "${GREEN}Created desktop shortcut:${NC} ~/Desktop/R-TRCE Studio.desktop"
+  fi
+fi
 
 # 6. Verify PATH integration
 PATH_CONFIGURED=false
@@ -386,8 +422,8 @@ echo -e "  ${BOLD}rtrce pitfalls script.R${NC}     Quick beginner pitfall sentin
 echo -e "  ${BOLD}rtrce quiz script.R${NC}         Generate student comprehension quiz"
 echo -e "  ${BOLD}rtrce explain script.R${NC}      Full architectural explanation"
 echo -e "  ${BOLD}rtrce help${NC}                  Every command and option"
-echo -e "  ${BOLD}rtrce-react-studio${NC}          Launch React local studio (Monaco & Asterov UI)"
-echo -e "  ${BOLD}rtrce-studio${NC}                Launch interactive Shiny web studio"
+echo -e "  ${BOLD}rtrce-studio${NC}                Launch interactive Studio (defaults to React Local IDE)"
+echo -e "  ${BOLD}rtrce-studio --shiny${NC}        Launch interactive Shiny web studio explicitly"
 echo ""
 echo -e "${YELLOW}Note:${NC} the older names 'r-trce' and 'r-trce-studio' still work as aliases."
 echo ""

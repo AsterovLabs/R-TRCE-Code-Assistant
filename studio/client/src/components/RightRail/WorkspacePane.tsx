@@ -5,6 +5,7 @@
 import React from 'react';
 import { Database, RefreshCw, Box } from 'lucide-react';
 import { WorkspaceObject } from '../../types';
+import { ensureArray } from '../../utils/array';
 
 interface WorkspacePaneProps {
   objects: WorkspaceObject[];
@@ -17,6 +18,8 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
   onRefresh,
   isLoading = false
 }) => {
+  const objectList = ensureArray(objects);
+
   return (
     <div className="h-full flex flex-col bg-rt-mantle text-xs select-none">
       {/* Header */}
@@ -26,7 +29,7 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
           <span>Workspace Environment</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="font-mono text-rt-teal font-bold">{objects.length}</span>
+          <span className="font-mono text-rt-teal font-bold">{objectList.length}</span>
           <button
             onClick={onRefresh}
             disabled={isLoading}
@@ -39,7 +42,7 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {objects.length === 0 ? (
+        {objectList.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center p-6 text-center text-xs text-rt-text-muted">
             <Box className="w-8 h-8 mb-2 opacity-30 text-rt-teal" />
             <p>Environment is empty.</p>

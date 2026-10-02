@@ -44,19 +44,22 @@ jobs:
 
           # 1. Linux Bundle
           mkdir -p dist/linux/rtrce-code-assistant
-          cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples www studio dist/linux/rtrce-code-assistant/
+          cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/linux/rtrce-code-assistant/
+          rm -rf dist/linux/rtrce-code-assistant/studio/client/node_modules
           chmod +x dist/linux/rtrce-code-assistant/r_trce.R dist/linux/rtrce-code-assistant/app.R dist/linux/rtrce-code-assistant/start_studio.sh dist/linux/rtrce-code-assistant/start_react_studio.sh dist/linux/rtrce-code-assistant/install.sh
           tar -czf dist/rtrce-code-assistant-linux-all.tar.gz -C dist/linux rtrce-code-assistant
 
           # 2. macOS Bundle
           mkdir -p dist/macos/rtrce-code-assistant
-          cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples www studio dist/macos/rtrce-code-assistant/
+          cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/macos/rtrce-code-assistant/
+          rm -rf dist/macos/rtrce-code-assistant/studio/client/node_modules
           chmod +x dist/macos/rtrce-code-assistant/r_trce.R dist/macos/rtrce-code-assistant/app.R dist/macos/rtrce-code-assistant/start_studio.sh dist/macos/rtrce-code-assistant/start_react_studio.sh dist/macos/rtrce-code-assistant/install.sh
           tar -czf dist/rtrce-code-assistant-macos-all.tar.gz -C dist/macos rtrce-code-assistant
 
           # 3. Windows 10 & 11 Bundle
           mkdir -p dist/windows/rtrce-code-assistant
-          cp -r r_trce.R app.R start_studio.bat start_react_studio.bat start_react_studio.ps1 install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R samples www studio dist/windows/rtrce-code-assistant/
+          cp -r r_trce.R app.R start_studio.bat start_react_studio.bat start_react_studio.ps1 install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/windows/rtrce-code-assistant/
+          rm -rf dist/windows/rtrce-code-assistant/studio/client/node_modules
           zip -r dist/rtrce-code-assistant-windows-all.zip dist/windows/rtrce-code-assistant
 
           # Standalone installer scripts and license for direct download

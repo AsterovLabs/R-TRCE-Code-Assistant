@@ -233,3 +233,122 @@ export_trace_json <- function(validation_list) {
     traces = traces
   ), auto_unbox = TRUE, pretty = TRUE)
 }
+
+# /**
+#  * @trce-id trce-explain-004
+#  * @trce-who Architectural Explainer Subsystem / Project Narrator
+#  * @trce-what Analyzes an entire R project directory and produces a comprehensive multi-file architectural explanation
+#  * @trce-where explain.R -> explain_project | Upstream: CLI explain router, Studio project overview | Downstream: detect_project_metadata, find_project_r_files, analyze_r_file
+#  * @trce-when Explaining an R package, project, or workspace directory
+#  * @trce-why Provides a holistic system architectural summary across all files in an R project
+#  * @trce-how Aggregates per-file AST analyses, compiles imported packages, lists all exported components, and formats output
+#  */
+explain_project <- function(project_dir, markdown = FALSE) {
+  meta <- detect_project_metadata(project_dir)
+  files <- meta$files
+
+  if (length(files) == 0) {
+    empty_msg <- sprintf("Project '%s' contains no R source files.", meta$name)
+    return(list(
+      metadata = meta,
+      imports = character(0),
+      components = list(),
+      text = empty_msg
+    ))
+  }
+
+  all_imports <- character(0)
+  all_components <- list()
+  file_analyses <- list()
+
+  for (f in files) {
+    p <- tryCatch(parse_r_file(f), error = function(e) NULL)
+    if (!is.null(p)) {
+      a <- tryCatch(analyze_r_file(p), error = function(e) NULL)
+      if (!is.null(a)) {
+        all_imports <- unique(c(all_imports, a$imports))
+        comps <- a$components
+        for (c in comps) {
+          c$source_file <- basename(f)
+          c$source_path <- f
+          all_components[[length(all_components) + 1L]] <- c
+        }
+        file_analyses[[f]] <- a
+      }
+    }
+  }
+
+  type_label <- switch(meta$type,
+    package = "R Package",
+    shiny_app = "Shiny Web Application",
+    rstudio_project = "RStudio Project",
+    "R Script Workspace"
+  )
+
+  out <- character(0)
+  w <- function(...) out <<- c(out, sprintf(...))
+
+  if (markdown) {
+    w("# Project Architecture: %s", meta$name)
+    w("")
+    w("- **Type:** %s", type_label)
+    if (!is.null(meta$title)) w("- **Description:** %s", meta$title)
+    w("- **Directory:** `%s`", meta$dir)
+    w("- **R Files:** %d", length(files))
+    w("- **Total Components:** %d", length(all_components))
+    w("")
+    w("## External Dependencies")
+    if (length(all_imports) > 0) {
+      for (imp in sort(all_imports)) w("- `%s`", imp)
+    } else {
+      w("*No external package imports detected (base R only).*")
+    }
+    w("")
+    w("## Source File Inventory")
+    for (f in files) {
+      fa <- file_analyses[[f]]
+      n_comp <- if (!is.null(fa) && !is.null(fa$components)) length(fa$components) else 0L
+      w("- `%s` (%d components, archetype: `%s`)", basename(f), n_comp, fa$file_type %||% "unknown")
+    }
+  } else {
+    sep <- paste(rep("=", 68), collapse = "")
+    dash <- paste(rep("-", 68), collapse = "")
+    w(sep)
+    w("PROJECT ARCHITECTURE: %s", toupper(meta$name))
+    w(sep)
+    w("Type:         %s", type_label)
+    if (!is.null(meta$title)) w("Title:        %s", meta$title)
+    w("Directory:    %s", meta$dir)
+    w("R Files:      %d", length(files))
+    w("Components:   %d", length(all_components))
+    w("")
+    w(dash)
+    w("EXTERNAL DEPENDENCIES (%d)", length(all_imports))
+    w(dash)
+    if (length(all_imports) > 0) {
+      w("  %s", paste(sort(all_imports), collapse = ", "))
+    } else {
+      w("  None (base R standard library only)")
+    }
+    w("")
+    w(dash)
+    w("PROJECT FILE BREAKDOWN")
+    w(dash)
+    for (f in files) {
+      fa <- file_analyses[[f]]
+      arch <- if (!is.null(fa) && !is.null(fa$file_type)) fa$file_type else "unparsed"
+      n_c <- if (!is.null(fa) && !is.null(fa$components)) length(fa$components) else 0L
+      w("  %-30s  [%-16s]  %2d components", basename(f), arch, n_c)
+    }
+    w(sep)
+  }
+
+  list(
+    metadata = meta,
+    imports = all_imports,
+    components = all_components,
+    file_analyses = file_analyses,
+    text = paste(out, collapse = "\n")
+  )
+}
+

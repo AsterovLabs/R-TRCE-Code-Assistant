@@ -5,14 +5,24 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "desktop": "electron --no-sandbox electron-main.js",
     "test": "node test_worker.js"
   },
-  "keywords": ["r", "trce", "ast", "studio", "editor"],
+  "keywords": [
+    "r",
+    "trce",
+    "ast",
+    "studio",
+    "editor"
+  ],
   "author": "Asterov Labs",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1"
   }
 }

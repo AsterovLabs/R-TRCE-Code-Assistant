@@ -510,3 +510,538 @@ format_console_entry <- function(entry) {
   }
   lines
 }
+
+# Resolve help documentation for a given R topic and render it into HTML.
+# /**
+#  * @trce-id trce-runtime-011
+#  * @trce-who Studio Help Pane / Session Evaluator
+#  * @trce-what Retrieves Rd documentation for an R topic or function and renders it into formatted HTML
+#  * @trce-when On console submission of ?topic or user search in the Help pane
+#  * @trce-where R/runtime.R -> resolve_r_help | Upstream: studio_help_pane_server, session_evaluate | Downstream: utils::help, tools::Rd2HTML
+#  * @trce-why Provides immediate built-in documentation lookup without leaving the IDE workspace
+#  * @trce-how Locates Rd help file via utils::help, converts it via tools::Rd2HTML, strips extraneous body tags, and returns structured metadata with HTML content
+#  */
+resolve_r_help <- function(topic, package = NULL) {
+  if (is.null(topic) || !nzchar(trimws(topic))) return(NULL)
+  clean_topic <- trimws(topic)
+  clean_topic <- sub("^\\?+", "", clean_topic)
+
+  h <- tryCatch({
+    if (!is.null(package) && nzchar(package)) {
+      utils::help(clean_topic, package = (package))
+    } else {
+      utils::help(clean_topic)
+    }
+  }, error = function(e) NULL)
+
+  paths <- if (!is.null(h)) as.character(h) else character(0)
+  if (length(paths) == 0) {
+    return(list(
+      found = FALSE,
+      topic = clean_topic,
+      package = NULL,
+      title = sprintf("No documentation found for \"%s\"", clean_topic),
+      html = sprintf("<p style='color: var(--rt-text-muted);'>No documentation found for <code>%s</code> in currently installed packages.</p>",
+                     clean_topic)
+    ))
+  }
+
+  help_path <- paths[1]
+  pkg_name <- basename(dirname(dirname(help_path)))
+  rd <- tryCatch(utils:::.getHelpFile(help_path), error = function(e) NULL)
+  if (is.null(rd)) {
+    return(list(
+      found = FALSE,
+      topic = clean_topic,
+      package = pkg_name,
+      title = clean_topic,
+      html = "<p style='color: var(--rt-text-muted);'>Could not parse Rd documentation file.</p>"
+    ))
+  }
+
+  out_f <- tempfile(fileext = ".html")
+  on.exit(unlink(out_f), add = TRUE)
+  tools::Rd2HTML(rd, out = out_f, package = pkg_name)
+  html_lines <- readLines(out_f, warn = FALSE)
+
+  body_start <- grep("<body[^>]*>", html_lines)
+  body_end <- grep("</body>", html_lines)
+  content_lines <- if (length(body_start) > 0 && length(body_end) > 0 && body_end > body_start) {
+    html_lines[(body_start + 1):(body_end - 1)]
+  } else {
+    html_lines
+  }
+
+  list(
+    found = TRUE,
+    topic = clean_topic,
+    package = pkg_name,
+    title = paste0(clean_topic, " (", pkg_name, ")"),
+    html = paste(content_lines, collapse = "\n")
+  )
+}
+
+# Extract a paginated data frame or matrix view for tabular inspection.
+# /**
+#  * @trce-id trce-runtime-012
+#  * @trce-who Studio Data Viewer / Environment Inspector
+#  * @trce-what Retrieves tabular data representation for a named workspace object
+#  * @trce-when When user clicks View(df) or opens a dataset in the Data Viewer tab
+#  * @trce-where R/runtime.R -> session_get_data_preview | Upstream: app.R Data Viewer tab, r_worker.R | Downstream: as.data.frame, head
+#  * @trce-why Enables spreadsheet-like data exploration with columns, types, and pagination without crashing on huge frames
+#  * @trce-how Fetches object from session environment, coerces to data frame, extracts column metadata and types, and slices rows up to max_rows
+#  */
+session_get_data_preview <- function(session, obj_name, max_rows = 500L) {
+  stopifnot(inherits(session, "rtrce_session"))
+
+  if (!exists(obj_name, envir = session$env, inherits = FALSE)) {
+    return(list(found = FALSE, error = sprintf("Object '%s' does not exist in the session.", obj_name)))
+  }
+
+  obj <- get(obj_name, envir = session$env)
+
+  if (is.matrix(obj) || is.table(obj)) {
+    obj <- tryCatch(as.data.frame(obj), error = function(e) NULL)
+  }
+
+  if (!is.data.frame(obj)) {
+    if (is.vector(obj) || is.factor(obj)) {
+      obj <- data.frame(Value = utils::head(obj, max_rows), stringsAsFactors = FALSE)
+    } else {
+      return(list(
+        found = FALSE,
+        error = sprintf("Object '%s' (class: %s) is not tabular.", obj_name, paste(class(obj), collapse = "/"))
+      ))
+    }
+  }
+
+  total_rows <- nrow(obj)
+  total_cols <- ncol(obj)
+
+  sliced <- if (total_rows > max_rows) utils::head(obj, max_rows) else obj
+
+  # Column metadata: name, type, missing count
+  col_info <- lapply(names(obj), function(col_nm) {
+    vals <- obj[[col_nm]]
+    list(
+      name = col_nm,
+      type = class(vals)[1],
+      n_na = sum(is.na(vals))
+    )
+  })
+
+  # Format cells as characters for safe tabular rendering
+  df_display <- as.data.frame(lapply(sliced, function(col) {
+    if (is.list(col)) vapply(col, preview_value, character(1)) else format(col, trim = TRUE)
+  }), stringsAsFactors = FALSE)
+
+  list(
+    found = TRUE,
+    name = obj_name,
+    total_rows = total_rows,
+    total_cols = total_cols,
+    displayed_rows = nrow(df_display),
+    columns = col_info,
+    data = df_display
+  )
+}
+
+# Auto-complete tokens against live session workspace, data frame columns, and loaded packages.
+# /**
+#  * @trce-id trce-runtime-013
+#  * @trce-who Studio Autocomplete Engine / Monaco Bridge
+#  * @trce-what Generates completion candidates for symbols, package functions, and data frame columns
+#  * @trce-when On editor or console autocomplete trigger (Tab or keystroke)
+#  * @trce-where R/runtime.R -> session_complete_tokens | Upstream: app.R completion handler, r_worker.R | Downstream: ls, names
+#  * @trce-why Speeds up typing and prevents beginner typos by discovering functions and dataframe column names interactively
+#  * @trce-how Inspects token prefix: handles obj$col syntax by drilling into names(obj), or matches candidate functions from workspace and attached packages
+#  */
+session_complete_tokens <- function(session, prefix, max_results = 50L) {
+  stopifnot(inherits(session, "rtrce_session"))
+
+  if (is.null(prefix) || !nzchar(trimws(prefix))) return(character(0))
+  prefix <- trimws(prefix)
+
+  # Case 1: object$column syntax
+  if (grepl("^[A-Za-z0-9_.]+\\$[A-Za-z0-9_.]*$", prefix)) {
+    parts <- strsplit(prefix, "$", fixed = TRUE)[[1]]
+    obj_name <- parts[1]
+    col_prefix <- if (length(parts) > 1) parts[2] else ""
+
+    if (exists(obj_name, envir = session$env, inherits = TRUE)) {
+      obj <- get(obj_name, envir = session$env, inherits = TRUE)
+      cols <- names(obj)
+      if (length(cols) > 0) {
+        matches <- cols[startsWith(tolower(cols), tolower(col_prefix))]
+        if (length(matches) > max_results) matches <- matches[seq_len(max_results)]
+        return(paste0(obj_name, "$", matches))
+      }
+    }
+    return(character(0))
+  }
+
+  # Case 2: standard symbol/function lookup
+  pkgs <- search()
+  pkg_symbols <- unlist(lapply(pkgs, function(p) {
+    tryCatch(ls(p, all.names = FALSE), error = function(e) character(0))
+  }), use.names = FALSE)
+
+  ws_symbols <- ls(session$env, all.names = FALSE)
+  all_candidates <- unique(c(ws_symbols, pkg_symbols))
+
+  hits <- all_candidates[startsWith(tolower(all_candidates), tolower(prefix))]
+  if (length(hits) > max_results) hits <- hits[seq_len(max_results)]
+  hits
+}
+
+# /**
+#  * @trce-id trce-runtime-014
+#  * @trce-who Studio Object Inspector Subsystem
+#  * @trce-what Extracts structural details, str(), summary(), attributes, and dimensions for any workspace object
+#  * @trce-when User clicks on an environment variable or inspect button to drill down
+#  * @trce-where R/runtime.R -> session_inspect_object | Upstream: app.R Environment inspector modal | Downstream: capture.output, str, summary
+#  * @trce-why Gives students and researchers deep visibility into complex data structures, lists, models, and environments without cluttering the main console
+#  * @trce-how Retrieves symbol from session$env, captures utils::str() and summary(), extracts class, mode, length, dim, attributes, and formats into structured metadata
+#  */
+session_inspect_object <- function(session, obj_name) {
+  stopifnot(inherits(session, "rtrce_session"))
+
+  if (!exists(obj_name, envir = session$env, inherits = FALSE)) {
+    return(list(found = FALSE, error = sprintf("Object '%s' does not exist in the session.", obj_name)))
+  }
+
+  obj <- get(obj_name, envir = session$env)
+
+  # Capture str() output safely
+  str_text <- tryCatch({
+    paste(utils::capture.output(utils::str(obj, max.level = 4, give.attr = TRUE)), collapse = "\n")
+  }, error = function(e) conditionMessage(e))
+
+  # Capture summary() safely
+  summary_text <- tryCatch({
+    paste(utils::capture.output(summary(obj)), collapse = "\n")
+  }, error = function(e) character(0))
+
+  attrs <- names(attributes(obj))
+  if (is.null(attrs)) attrs <- character(0)
+
+  is_tabular <- is.data.frame(obj) || is.matrix(obj) || is.table(obj)
+
+  list(
+    found = TRUE,
+    name = obj_name,
+    class = paste(class(obj), collapse = ", "),
+    type = typeof(obj),
+    mode = mode(obj),
+    length = length(obj),
+    dim = if (!is.null(dim(obj))) paste(dim(obj), collapse = " x ") else NULL,
+    size = format(utils::object.size(obj), units = "auto"),
+    is_tabular = is_tabular,
+    str = str_text,
+    summary = summary_text,
+    attributes = attrs
+  )
+}
+
+# /**
+#  * @trce-id trce-runtime-015
+#  * @trce-who Studio Reproducible Report Engine
+#  * @trce-what Compiles R Markdown (.Rmd) or Quarto (.qmd) source documents into standalone self-contained HTML reports
+#  * @trce-when On user clicking Knit / Render in the editor or calling rtrce render
+#  * @trce-where R/runtime.R -> session_render_report | Upstream: app.R Report Preview modal / editor action | Downstream: rmarkdown::render or internal evaluator
+#  * @trce-why Enables students and researchers to generate polished, shareable, reproducible computational notebooks with zero friction
+#  * @trce-how Tries rmarkdown::render when installed; falls back to an embedded lightweight parser that evaluates ```{r} chunks in session$env and inlines base64 plots
+#  */
+session_render_report <- function(session, doc_code, doc_name = "report.Rmd", output_dir = tempdir()) {
+  stopifnot(inherits(session, "rtrce_session"))
+
+  if (is.null(doc_code) || !nzchar(trimws(doc_code))) {
+    return(list(ok = FALSE, error = "Document content is empty."))
+  }
+
+  escape_html <- function(s) {
+    if (is.null(s) || length(s) == 0) return("")
+    s <- gsub("&", "&amp;", s, fixed = TRUE)
+    s <- gsub("<", "&lt;", s, fixed = TRUE)
+    s <- gsub(">", "&gt;", s, fixed = TRUE)
+    s <- gsub("\"", "&quot;", s, fixed = TRUE)
+    s
+  }
+
+  format_md <- function(s) {
+    s <- escape_html(s)
+    s <- gsub("\\*\\*(.*?)\\*\\*", "<strong>\\1</strong>", s, perl = TRUE)
+    s <- gsub("`(.*?)`", "<code>\\1</code>", s, perl = TRUE)
+    s
+  }
+
+  has_rmarkdown <- requireNamespace("rmarkdown", quietly = TRUE) &&
+    (tryCatch(rmarkdown::pandoc_available(), error = function(e) FALSE))
+
+  # Method 1: rmarkdown::render if available
+  if (has_rmarkdown) {
+    tmp_in <- file.path(output_dir, paste0("rtrce_", format(Sys.time(), "%Y%m%d_%H%M%S"), "_", basename(doc_name)))
+    tmp_out <- sub("\\.[RrQq][Mm][Dd]$", ".html", tmp_in)
+    if (tmp_out == tmp_in) tmp_out <- paste0(tmp_in, ".html")
+
+    writeLines(doc_code, tmp_in)
+    res <- tryCatch({
+      rmarkdown::render(
+        input = tmp_in,
+        output_file = tmp_out,
+        envir = session$env,
+        clean = TRUE,
+        quiet = TRUE
+      )
+      html <- paste(readLines(tmp_out, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+      list(ok = TRUE, html = html, file_path = tmp_out, engine = "rmarkdown", error = NULL)
+    }, error = function(e) {
+      list(ok = FALSE, error = conditionMessage(e))
+    })
+    if (res$ok) return(res)
+  }
+
+  # Method 2: Built-in Lightweight R-TRCE Report Renderer
+  lines <- strsplit(doc_code, "\n", fixed = TRUE)[[1]]
+
+  title <- "R-TRCE Analysis Report"
+  author <- ""
+  date_str <- format(Sys.Date(), "%B %d, %Y")
+
+  idx <- 1L
+  n_lines <- length(lines)
+
+  # Check for YAML front matter
+  if (n_lines >= 2 && grepl("^---\\s*$", lines[1])) {
+    yaml_end <- which(grepl("^---\\s*$", lines[-1]))
+    if (length(yaml_end) > 0) {
+      yaml_lines <- lines[2:yaml_end[1]]
+      for (yl in yaml_lines) {
+        if (grepl("^title:\\s*", yl)) title <- gsub("^title:\\s*[\"']?|[\"']?\\s*$", "", yl)
+        if (grepl("^author:\\s*", yl)) author <- gsub("^author:\\s*[\"']?|[\"']?\\s*$", "", yl)
+        if (grepl("^date:\\s*", yl)) date_str <- gsub("^date:\\s*[\"']?|[\"']?\\s*$", "", yl)
+      }
+      idx <- yaml_end[1] + 2L
+    }
+  }
+
+  body_html <- character(0)
+  in_chunk <- FALSE
+  chunk_code <- character(0)
+  in_list <- FALSE
+
+  while (idx <= n_lines) {
+    line <- lines[idx]
+
+    if (grepl("^```+\\{r", line)) {
+      if (in_list) { body_html <- c(body_html, "</ul>"); in_list <- FALSE }
+      in_chunk <- TRUE
+      chunk_code <- character(0)
+      idx <- idx + 1L
+      next
+    }
+
+    if (in_chunk && grepl("^```+\\s*$", line)) {
+      in_chunk <- FALSE
+      chunk_str <- paste(chunk_code, collapse = "\n")
+      body_html <- c(body_html, sprintf(
+        "<div class=\"rtrce-chunk\"><div class=\"rtrce-chunk-header\">R Code</div><pre class=\"rtrce-code\"><code>%s</code></pre>",
+        escape_html(chunk_str)
+      ))
+
+      # Run chunk in session
+      eval_res <- session_evaluate(session, chunk_str)
+      if (length(eval_res$entries) > 0) {
+        for (entry in eval_res$entries) {
+          con_lines <- format_console_entry(entry)
+          if (length(con_lines) > 0) {
+            body_html <- c(body_html, sprintf(
+              "<pre class=\"rtrce-output\"><code>%s</code></pre>",
+              escape_html(paste(con_lines, collapse = "\n"))
+            ))
+          }
+          if (!is.null(entry$plot_file) && file.exists(entry$plot_file)) {
+            p_bytes <- readBin(entry$plot_file, "raw", file.info(entry$plot_file)$size)
+            b64 <- jsonlite::base64_enc(p_bytes)
+            body_html <- c(body_html, sprintf(
+              "<div class=\"rtrce-plot\"><img src=\"data:image/png;base64,%s\" alt=\"R Plot\" /></div>",
+              b64
+            ))
+          }
+        }
+      }
+      body_html <- c(body_html, "</div>")
+      idx <- idx + 1L
+      next
+    }
+
+    if (in_chunk) {
+      chunk_code <- c(chunk_code, line)
+      idx <- idx + 1L
+      next
+    }
+
+    trimmed <- trimws(line)
+    if (!nzchar(trimmed)) {
+      if (in_list) { body_html <- c(body_html, "</ul>"); in_list <- FALSE }
+      idx <- idx + 1L
+      next
+    }
+
+    if (grepl("^#\\s+", line)) {
+      if (in_list) { body_html <- c(body_html, "</ul>"); in_list <- FALSE }
+      body_html <- c(body_html, sprintf("<h1>%s</h1>", escape_html(sub("^#\\s+", "", line))))
+    } else if (grepl("^##\\s+", line)) {
+      if (in_list) { body_html <- c(body_html, "</ul>"); in_list <- FALSE }
+      body_html <- c(body_html, sprintf("<h2>%s</h2>", escape_html(sub("^##\\s+", "", line))))
+    } else if (grepl("^###\\s+", line)) {
+      if (in_list) { body_html <- c(body_html, "</ul>"); in_list <- FALSE }
+      body_html <- c(body_html, sprintf("<h3>%s</h3>", escape_html(sub("^###\\s+", "", line))))
+    } else if (grepl("^[*-]\\s+", trimmed)) {
+      if (!in_list) { body_html <- c(body_html, "<ul>"); in_list <- TRUE }
+      body_html <- c(body_html, sprintf("<li>%s</li>", format_md(sub("^[*-]\\s+", "", trimmed))))
+    } else {
+      if (in_list) { body_html <- c(body_html, "</ul>"); in_list <- FALSE }
+      body_html <- c(body_html, sprintf("<p>%s</p>", format_md(trimmed)))
+    }
+
+    idx <- idx + 1L
+  }
+
+  if (in_list) body_html <- c(body_html, "</ul>")
+
+  full_html <- paste0(
+    "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\"/>\n",
+    "<title>", escape_html(title), "</title>\n",
+    "<style>\n",
+    "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; ",
+    "line-height: 1.6; max-width: 860px; margin: 0 auto; padding: 32px 24px; color: #1e1e2e; background: #fafafa; }\n",
+    "h1 { border-bottom: 2px solid #89b4fa; padding-bottom: 8px; margin-top: 24px; color: #1e1e2e; }\n",
+    "h2 { border-bottom: 1px solid #cdd6f4; padding-bottom: 4px; margin-top: 20px; color: #313244; }\n",
+    "h3 { margin-top: 16px; color: #45475a; }\n",
+    ".rtrce-report-meta { margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e6e9ef; color: #6c6f85; font-size: 14px; }\n",
+    ".rtrce-chunk { margin: 16px 0; border: 1px solid #dce0e8; border-radius: 8px; overflow: hidden; background: #ffffff; }\n",
+    ".rtrce-chunk-header { background: #e6e9ef; padding: 4px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #4c4f69; }\n",
+    ".rtrce-code { margin: 0; padding: 10px 14px; background: #eff1f5; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; overflow-x: auto; color: #1e1e2e; }\n",
+    ".rtrce-output { margin: 0; padding: 10px 14px; background: #e6e9ef; border-top: 1px solid #ccd0da; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; color: #4c4f69; }\n",
+    ".rtrce-plot { text-align: center; padding: 14px; background: #ffffff; border-top: 1px solid #ccd0da; }\n",
+    ".rtrce-plot img { max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }\n",
+    "code { background: #e6e9ef; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }\n",
+    ".rtrce-footer { margin-top: 48px; padding-top: 12px; border-top: 1px solid #ccd0da; font-size: 12px; color: #9ca0b0; display: flex; justify-content: space-between; }\n",
+    "</style>\n</head>\n<body>\n",
+    "<h1>", escape_html(title), "</h1>\n",
+    "<div class=\"rtrce-report-meta\">",
+    if (nzchar(author)) paste0("<strong>Author:</strong> ", escape_html(author), " &nbsp;|&nbsp; ") else "",
+    "<strong>Date:</strong> ", escape_html(date_str),
+    "</div>\n",
+    paste(body_html, collapse = "\n"),
+    "\n<div class=\"rtrce-footer\"><span>Generated by R-TRCE Code Assistant Studio</span><span>", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "</span></div>\n",
+    "</body>\n</html>\n"
+  )
+
+  out_path <- file.path(output_dir, paste0("rtrce_report_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html"))
+  writeLines(full_html, out_path)
+
+  list(ok = TRUE, html = full_html, file_path = out_path, engine = "rtrce-builtin", error = NULL)
+}
+
+# /**
+#  * @trce-id trce-runtime-016
+#  * @trce-who Studio Integrated System Terminal Engine
+#  * @trce-what Executes shell and system CLI commands in the project directory and returns exit code and output transcript
+#  * @trce-when On terminal command submission from the Terminal tab in Studio
+#  * @trce-where R/runtime.R -> session_run_terminal_cmd | Upstream: app.R studio_console_server | Downstream: base::system2
+#  * @trce-why Lets students and developers run git, inspect directories, manage packages, and execute build tools without leaving the IDE
+#  * @trce-how Invokes bash or sh shell via system2 with stdout/stderr redirection and working directory binding, capturing exit status
+#  */
+session_run_terminal_cmd <- function(wd, cmd, timeout = 30L) {
+  if (is.null(cmd) || !nzchar(trimws(cmd))) {
+    return(list(cmd = "", exit_code = 0L, output = character(0), wd = wd %||% getwd()))
+  }
+
+  target_wd <- if (!is.null(wd) && nzchar(wd) && dir.exists(wd)) wd else getwd()
+
+  sh_bin <- Sys.which("bash")
+  if (!nzchar(sh_bin)) sh_bin <- Sys.which("sh")
+
+  raw_out <- tryCatch({
+    if (nzchar(sh_bin)) {
+      system2(sh_bin, args = c("-c", shQuote(cmd)), stdout = TRUE, stderr = TRUE, timeout = timeout)
+    } else {
+      system(cmd, intern = TRUE)
+    }
+  }, error = function(e) {
+    paste0("Terminal error: ", conditionMessage(e))
+  })
+
+  exit_status <- attr(raw_out, "status")
+  if (is.null(exit_status)) exit_status <- 0L
+
+  list(
+    cmd = cmd,
+    exit_code = as.integer(exit_status),
+    output = as.character(raw_out),
+    wd = target_wd
+  )
+}
+
+# /**
+#  * @trce-id trce-runtime-017
+#  * @trce-who Live Session Runtime / Project Lifecycle Manager
+#  * @trce-what Initializes an active R project workspace by resetting state, setting working directory, and sourcing local configuration
+#  * @trce-where runtime.R -> session_open_project | Upstream: app.R, studio backend, r_trce.R | Downstream: session_reset, session_set_wd, detect_project_metadata
+#  * @trce-when On project open or switch in Studio or CLI
+#  * @trce-why Provides true RStudio-compatible project semantics where each project has its own root, environment, and .Rprofile
+#  * @trce-how Cleans session workspace, sets process directory, loads .Renviron, safely executes .Rprofile in the session environment, and attaches metadata
+#  */
+session_open_project <- function(session, project_dir) {
+  stopifnot(inherits(session, "rtrce_session"))
+
+  if (!is.character(project_dir) || length(project_dir) != 1 || !nzchar(project_dir) || !dir.exists(project_dir)) {
+    stop(sprintf("Invalid project directory: '%s'", project_dir %||% ""), call. = FALSE)
+  }
+
+  norm_dir <- normalizePath(project_dir, winslash = "/", mustWork = TRUE)
+
+  # 1. Reset state
+  session_reset(session)
+
+  # 2. Set directory
+  session_set_wd(session, norm_dir, change_process = TRUE)
+
+  # 3. Detect metadata
+  meta <- detect_project_metadata(norm_dir)
+  session$project_metadata <- meta
+
+  # 4. Check for .Renviron
+  renviron_file <- file.path(norm_dir, ".Renviron")
+  has_renviron <- file.exists(renviron_file)
+  if (has_renviron) {
+    tryCatch(readRenviron(renviron_file), error = function(e) NULL)
+  }
+
+  # 5. Check for .Rprofile
+  rprofile_file <- file.path(norm_dir, ".Rprofile")
+  has_rprofile <- file.exists(rprofile_file)
+  rprofile_err <- NULL
+  if (has_rprofile) {
+    tryCatch({
+      sys.source(rprofile_file, envir = session$env)
+    }, error = function(e) {
+      rprofile_err <<- conditionMessage(e)
+    })
+  }
+
+  list(
+    ok = is.null(rprofile_err),
+    project = meta,
+    renviron_loaded = has_renviron,
+    rprofile_loaded = has_rprofile,
+    rprofile_error = rprofile_err
+  )
+}
+
+
+
+
+

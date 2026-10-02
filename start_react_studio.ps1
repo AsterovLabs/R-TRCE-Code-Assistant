@@ -43,8 +43,13 @@ Write-Host "[OK] Found R: $RscriptBin" -ForegroundColor Green
 # 2. Locate Node.js
 $NodeCmd = Get-Command "node.exe" -ErrorAction SilentlyContinue
 if (-not $NodeCmd) {
-    Write-Error "Node.js not found. Please install Node.js from https://nodejs.org/"
-    exit 1
+    Write-Host "==================================================================" -ForegroundColor Yellow
+    Write-Host "  [i] Note: Node.js was not detected on this machine." -ForegroundColor Yellow
+    Write-Host "  Launching interactive Shiny Studio workspace instead..." -ForegroundColor Yellow
+    Write-Host "  (Install Node.js v18+ from https://nodejs.org to use React Studio)" -ForegroundColor Yellow
+    Write-Host "==================================================================" -ForegroundColor Yellow
+    & (Join-Path $ScriptDir "start_studio.bat")
+    exit $LASTEXITCODE
 }
 Write-Host "[OK] Found Node: $($NodeCmd.Source)" -ForegroundColor Green
 
@@ -67,14 +72,28 @@ if (-not (Test-Path $ClientDist)) {
     Pop-Location
 }
 
-# 5. Open browser & run server
+# 5. Launch Native Desktop IDE or Standalone App Window
 $Url = "http://$Host`:$Port"
-Write-Host "[*] Launching $Url..." -ForegroundColor Green
-Start-Process $Url
+$ElectronBin = Join-Path $ScriptDir "studio\server\node_modules\.bin\electron.cmd"
 
 $env:RSCRIPT_BIN = $RscriptBin
 $env:PORT = $Port
 $env:HOST = $Host
+
+if (Test-Path $ElectronBin) {
+    Write-Host "[*] Launching R-TRCE Code Assistant Native Desktop IDE..." -ForegroundColor Green
+    & $ElectronBin (Join-Path $ScriptDir "studio\server\electron-main.js")
+    exit $LASTEXITCODE
+}
+
+# Standalone App Window Fallback
+if (Get-Command msedge.exe -ErrorAction SilentlyContinue) {
+    Start-Process msedge.exe -ArgumentList "--app=$Url"
+} elseif (Get-Command chrome.exe -ErrorAction SilentlyContinue) {
+    Start-Process chrome.exe -ArgumentList "--app=$Url"
+} else {
+    Start-Process $Url
+}
 
 Push-Location (Join-Path $ScriptDir "studio\server")
 & node.exe "server.js"

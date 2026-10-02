@@ -68,27 +68,30 @@ class TerminalWebSocket {
     }
   }
 
-  evaluate(code: string, timeout = 10, wd?: string) {
+  evaluate(code: string, timeout = 10, wd?: string, lang?: string) {
     this.send({
       type: 'eval',
       id: `eval-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       code,
       timeout,
-      wd
+      wd,
+      lang
     });
   }
 
-  reset() {
+  reset(lang?: string) {
     this.send({
       type: 'reset',
-      id: `reset-${Date.now()}`
+      id: `reset-${Date.now()}`,
+      lang
     });
   }
 
-  getWorkspace() {
+  getWorkspace(lang?: string) {
     this.send({
       type: 'workspace',
-      id: `ws-${Date.now()}`
+      id: `ws-${Date.now()}`,
+      lang
     });
   }
 }

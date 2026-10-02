@@ -12,6 +12,7 @@ interface StatusBarProps {
   coveragePct?: number;
   traceCount?: number;
   rVersion?: string;
+  language?: string;
   isConnected?: boolean;
 }
 
@@ -21,7 +22,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   currentFile,
   coveragePct = 100,
   traceCount = 0,
-  rVersion = 'R 4.5.2',
+  rVersion = 'Multi-Kernel',
+  language = 'R',
   isConnected = true
 }) => {
   const fileName = currentFile ? currentFile.split(/[/\\]/).pop() : 'untitled.R';
@@ -32,7 +34,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-1 text-rt-text-muted">
           <Cpu className="w-3 h-3 text-rt-mauve" />
-          <span>{rVersion}</span>
+          <span className="font-semibold text-rt-mauve uppercase">{language}</span>
         </div>
 
         <div className="flex items-center space-x-1 truncate max-w-sm">

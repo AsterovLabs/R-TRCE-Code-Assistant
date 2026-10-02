@@ -451,18 +451,7 @@ analyze_single_formula <- function(node, parent_fn) {
 #  * @trce-how Accepts parameters (packages); operates self-contained
 #  */
 package_primer <- function(packages) {
-  primer <- list(
-    "ggplot2" = list(name = "ggplot2", domain = "Data Visualization", role = "Implements Leland Wilkinson's 'Grammar of Graphics'. Composes charts in independent layers: data + aesthetic mappings (aes) + geometric shapes (geom_*) + scales."),
-    "dplyr"   = list(name = "dplyr", domain = "Data Manipulation", role = "Provides a consistent grammar of data transformation. Core verbs: filter (rows), select (columns), mutate (new columns), summarise (aggregations), and arrange (sorting)."),
-    "tidyr"   = list(name = "tidyr", domain = "Data Tidying", role = "Helps format data so each variable is a column and each observation is a row using pivot_longer() and pivot_wider()."),
-    "shiny"   = list(name = "shiny", domain = "Interactive Web Applications", role = "Turns R code into interactive dashboards. Separates UI layout from reactive server logic via an event-driven reactive dependency graph."),
-    "readr"   = list(name = "readr", domain = "Data Import", role = "Reads rectangular data (CSV, TSV, fixed-width) fast, with automatic column type parsing and reproducible parsing issues reporting."),
-    "purrr"   = list(name = "purrr", domain = "Functional Programming", role = "Replaces for-loops with type-safe iteration tools (map, map_dfr, walk) promoting pure, vector-oriented programming."),
-    "tibble"  = list(name = "tibble", domain = "Data Structures", role = "A modern reimagining of R data frames. Never changes variable names or types silently, and prints previews cleanly."),
-    "stringr" = list(name = "stringr", domain = "String Manipulation", role = "Provides consistent string operations prefixed with 'str_' based on the ICU library."),
-    "forcats" = list(name = "forcats", domain = "Factor Handling", role = "Tools for categorical variables: reordering levels (fct_reorder), lumping rare levels (fct_lump), and recoding."),
-    "jsonlite"= list(name = "jsonlite", domain = "Data Serialization", role = "Fast, robust JSON parser and generator for bidirectional R-to-JSON data interchange.")
-  )
+  primer <- load_registry("packages", "r")
 
   results <- list()
   for (pkg in packages) {

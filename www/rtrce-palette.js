@@ -7,6 +7,9 @@
     { id: 'run-all',     label: 'Run All',                  keys: 'Ctrl+Shift+Enter', group: 'Run',   action: function() { clickBtn('editor_run_all'); } },
     // File
     { id: 'save',        label: 'Save File',                keys: 'Ctrl+S',           group: 'File',  action: function() { clickBtn('editor_save'); } },
+    // Edit
+    { id: 'find',        label: 'Find in Document',         keys: 'Ctrl+F',           group: 'Edit',  action: function() { triggerFind(false); } },
+    { id: 'replace',     label: 'Find & Replace',           keys: 'Ctrl+H',           group: 'Edit',  action: function() { triggerFind(true); } },
     // View
     { id: 'toggle-theme', label: 'Toggle Light/Dark Theme', keys: '',                 group: 'View',  action: function() { clickBtn('btn_theme_toggle'); } },
     { id: 'focus-console', label: 'Focus Console',          keys: '',                 group: 'View',  action: function() { focusConsole(); } },
@@ -50,6 +53,18 @@
   function focusEditor() {
     var el = document.getElementById('editor_source');
     if (el && el._cmInstance) el._cmInstance.focus();
+  }
+  function triggerFind(withReplace) {
+    focusEditor();
+    var el = document.getElementById('editor_source');
+    if (el && el._cmInstance) {
+      var evt = new KeyboardEvent('keydown', {
+        key: withReplace ? 'h' : 'f',
+        ctrlKey: true,
+        bubbles: true
+      });
+      el._cmInstance.getInputField().dispatchEvent(evt);
+    }
   }
 
   var backdrop, input, resultsContainer;

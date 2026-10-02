@@ -106,21 +106,32 @@ handle_worker_action <- function(action, payload) {
     "parse" = {
       parse_fn <- function(target_path) {
         parsed <- parse_r_file(target_path)
+        if (!is.null(payload$file) && nzchar(payload$file)) {
+          parsed$file_name <- basename(payload$file)
+          parsed$file_path <- payload$file
+        }
         analyzed <- analyze_r_file(parsed)
         comps <- select_annotatable_components(analyzed$components)
+        comps <- lapply(comps, function(c) {
+          if (!is.null(c$args)) c$args <- I(c$args)
+          if (!is.null(c$calls)) c$calls <- I(c$calls)
+          if (!is.null(c$calls_local)) c$calls_local <- I(c$calls_local)
+          if (!is.null(c$called_by)) c$called_by <- I(c$called_by)
+          c
+        })
         list(
-          file = target_path,
+          file = if (!is.null(payload$file) && nzchar(payload$file)) payload$file else target_path,
           line_count = length(parsed$raw_lines),
           component_count = length(comps),
-          components = comps,
+          components = I(comps),
           tokens_count = nrow(parsed$parse_data),
-          raw_lines = parsed$raw_lines
+          raw_lines = I(parsed$raw_lines)
         )
       }
-      if (!is.null(payload$file) && file.exists(payload$file)) {
-        parse_fn(payload$file)
-      } else if (!is.null(payload$code)) {
+      if (!is.null(payload$code)) {
         with_temp_code_file(payload$code, parse_fn)
+      } else if (!is.null(payload$file) && file.exists(payload$file)) {
+        parse_fn(payload$file)
       } else {
         stop("Missing 'file' or 'code' parameter")
       }
@@ -129,21 +140,32 @@ handle_worker_action <- function(action, payload) {
     "analyze" = {
       analyze_fn <- function(target_path) {
         parsed <- parse_r_file(target_path)
+        if (!is.null(payload$file) && nzchar(payload$file)) {
+          parsed$file_name <- basename(payload$file)
+          parsed$file_path <- payload$file
+        }
         analyzed <- analyze_r_file(parsed)
         comps <- select_annotatable_components(analyzed$components)
+        comps <- lapply(comps, function(c) {
+          if (!is.null(c$args)) c$args <- I(c$args)
+          if (!is.null(c$calls)) c$calls <- I(c$calls)
+          if (!is.null(c$calls_local)) c$calls_local <- I(c$calls_local)
+          if (!is.null(c$called_by)) c$called_by <- I(c$called_by)
+          c
+        })
         list(
           file_type = analyzed$file_type,
           archetype = analyzed$file_type,
-          imports = analyzed$imports,
-          functions = analyzed$defined_functions,
+          imports = I(analyzed$imports %||% character(0)),
+          functions = I(analyzed$defined_functions %||% character(0)),
           component_count = length(comps),
-          components = comps
+          components = I(comps)
         )
       }
-      if (!is.null(payload$file) && file.exists(payload$file)) {
-        analyze_fn(payload$file)
-      } else if (!is.null(payload$code)) {
+      if (!is.null(payload$code)) {
         with_temp_code_file(payload$code, analyze_fn)
+      } else if (!is.null(payload$file) && file.exists(payload$file)) {
+        analyze_fn(payload$file)
       } else {
         stop("Missing 'file' or 'code' parameter")
       }
@@ -152,23 +174,28 @@ handle_worker_action <- function(action, payload) {
     "annotate" = {
       annotate_fn <- function(target_path) {
         parsed <- parse_r_file(target_path)
+        if (!is.null(payload$file) && nzchar(payload$file)) {
+          parsed$file_name <- basename(payload$file)
+          parsed$file_path <- payload$file
+        }
         analyzed <- analyze_r_file(parsed)
         prefix <- payload$prefix %||% "trce-r"
         style <- payload$style %||% "jsdoc"
         no_header <- isTRUE(payload$no_header)
-        res <- inject_annotations(parsed, analyzed, prefix = prefix, style = style, no_header = no_header)
+        res <- inject_annotations(parsed, analyzed, prefix = prefix, style = style, add_file_header = !no_header)
+        annotated_lines <- strsplit(res$annotated_code, "\n")[[1]]
         list(
-          original_lines = parsed$raw_lines,
-          annotated_lines = res$annotated_lines,
-          annotated_text = paste(res$annotated_lines, collapse = "\n"),
-          inserted_count = res$inserted_count,
-          components_annotated = res$components_annotated
+          original_lines = I(parsed$raw_lines),
+          annotated_lines = I(annotated_lines),
+          annotated_text = res$annotated_code,
+          inserted_count = res$blocks_added,
+          components_annotated = res$blocks_added
         )
       }
-      if (!is.null(payload$file) && file.exists(payload$file)) {
-        annotate_fn(payload$file)
-      } else if (!is.null(payload$code)) {
+      if (!is.null(payload$code)) {
         with_temp_code_file(payload$code, annotate_fn)
+      } else if (!is.null(payload$file) && file.exists(payload$file)) {
+        annotate_fn(payload$file)
       } else {
         stop("Missing 'file' or 'code' parameter")
       }
@@ -176,12 +203,71 @@ handle_worker_action <- function(action, payload) {
 
     "check" = {
       check_fn <- function(target_path) {
-        validate_r_annotations(target_path)
+        parsed <- parse_r_file(target_path)
+        if (!is.null(payload$file) && nzchar(payload$file)) {
+          parsed$file_name <- basename(payload$file)
+          parsed$file_path <- payload$file
+        }
+        res <- validate_r_annotations(target_path, parsed_obj = parsed)
+
+        err_msgs <- character(0)
+        warn_msgs <- character(0)
+        for (iss in res$issues) {
+          if (identical(iss$severity, "ERROR")) {
+            err_msgs <- c(err_msgs, iss$message)
+          } else {
+            warn_msgs <- c(warn_msgs, iss$message)
+          }
+        }
+
+        traces <- lapply(res$entries, function(e) {
+          f <- e$fields
+          missing <- as.list(setdiff(REQUIRED_FIELDS, names(f)))
+          for (field_name in intersect(REQUIRED_FIELDS, names(f))) {
+            if (!nzchar(trimws(f[[field_name]] %||% ""))) {
+              if (!(field_name %in% missing)) {
+                missing <- c(missing, field_name)
+              }
+            }
+          }
+          list(
+            id = e$id,
+            line = e$line,
+            who = f$who %||% "",
+            what = f$what %||% "",
+            where = f$where %||% "",
+            when = f$when %||% "",
+            why = f$why %||% "",
+            how = f$how %||% "",
+            is_valid = (length(missing) == 0 && grepl(TRACE_ID_REGEX, e$id)),
+            missing_fields = I(missing)
+          )
+        })
+
+        list(
+          file_path = res$file_path,
+          file_name = res$file_name,
+          is_valid = isTRUE(res$is_clean),
+          is_clean = isTRUE(res$is_clean),
+          coverage_pct = res$coverage_pct,
+          total_traces = res$total_traces,
+          valid_traces = res$valid_traces,
+          total_targets = res$total_targets,
+          annotated_targets = res$annotated_targets,
+          total_components = res$total_targets,
+          annotated_components = res$annotated_targets,
+          unannotated_targets = I(res$unannotated_targets %||% character(0)),
+          errors = I(as.list(err_msgs)),
+          warnings = I(as.list(warn_msgs)),
+          issues = I(res$issues %||% list()),
+          traces = I(traces),
+          entries = I(res$entries %||% list())
+        )
       }
-      if (!is.null(payload$file) && file.exists(payload$file)) {
-        check_fn(payload$file)
-      } else if (!is.null(payload$code)) {
+      if (!is.null(payload$code)) {
         with_temp_code_file(payload$code, check_fn)
+      } else if (!is.null(payload$file) && file.exists(payload$file)) {
+        check_fn(payload$file)
       } else {
         stop("Missing 'file' or 'code' parameter")
       }
@@ -216,7 +302,7 @@ handle_worker_action <- function(action, payload) {
         traps <- detect_student_pitfalls(parsed, analyzed)
         list(
           pitfall_count = length(traps),
-          traps = traps
+          traps = I(traps)
         )
       }
       if (!is.null(payload$file) && file.exists(payload$file)) {
@@ -232,7 +318,14 @@ handle_worker_action <- function(action, payload) {
       quiz_fn <- function(target_path) {
         parsed <- parse_r_file(target_path)
         analyzed <- analyze_r_file(parsed)
-        generate_student_quiz(parsed, analyzed)
+        quiz_res <- generate_student_quiz(parsed, analyzed)
+        if (is.list(quiz_res)) {
+          quiz_res <- lapply(quiz_res, function(q) {
+            if (!is.null(q$options)) q$options <- I(q$options)
+            q
+          })
+        }
+        I(quiz_res)
       }
       if (!is.null(payload$file) && file.exists(payload$file)) {
         quiz_fn(payload$file)
@@ -266,13 +359,21 @@ handle_worker_action <- function(action, payload) {
         }
       }
 
+      safe_entries <- lapply(res$entries, function(en) {
+        if (!is.null(en$output)) en$output <- I(en$output)
+        if (!is.null(en$messages)) en$messages <- I(en$messages)
+        if (!is.null(en$warnings)) en$warnings <- I(en$warnings)
+        if (!is.null(en$value_text)) en$value_text <- I(en$value_text)
+        en
+      })
+
       ws <- session_workspace(WORKER_SESSION)
       list(
         ok = res$ok,
         incomplete = res$incomplete,
-        entries = res$entries,
-        plots = plots_list,
-        workspace = ws,
+        entries = I(safe_entries),
+        plots = I(plots_list),
+        workspace = I(ws),
         wd = res$wd
       )
     },
@@ -303,6 +404,52 @@ handle_worker_action <- function(action, payload) {
         )
       })
       list(samples = samples)
+    },
+
+    "help" = {
+      topic <- payload$topic
+      pkg <- payload$package
+      resolve_r_help(topic, package = pkg)
+    },
+
+    "complete" = {
+      prefix <- payload$prefix
+      list(candidates = session_complete_tokens(WORKER_SESSION, prefix))
+    },
+
+    "data_preview" = {
+      name <- payload$name
+      max_rows <- as.integer(payload$max_rows %||% 500)
+      session_get_data_preview(WORKER_SESSION, name, max_rows = max_rows)
+    },
+
+    "open_project" = {
+      dir_path <- payload$dir %||% payload$path
+      if (is.null(dir_path) || !dir.exists(dir_path)) {
+        stop(sprintf("Project directory does not exist: '%s'", dir_path %||% ""))
+      }
+      res <- session_open_project(WORKER_SESSION, dir_path)
+      list(
+        ok = res$ok,
+        project = res$project,
+        renviron_loaded = res$renviron_loaded,
+        rprofile_loaded = res$rprofile_loaded,
+        rprofile_error = res$rprofile_error,
+        workspace = I(session_workspace(WORKER_SESSION)),
+        wd = WORKER_SESSION$wd
+      )
+    },
+
+    "project_overview" = {
+      dir_path <- payload$dir %||% payload$path %||% WORKER_SESSION$wd
+      meta <- detect_project_metadata(dir_path)
+      val <- validate_project_annotations(dir_path)
+      exp <- explain_project(dir_path, markdown = TRUE)
+      list(
+        metadata = meta,
+        validation = val,
+        explanation = exp
+      )
     },
 
     stop(paste("Unknown action:", action))

@@ -107,8 +107,17 @@ async function runTests() {
     assert.strictEqual(pitfallsRes.result.pitfall_count >= 5, true, 'traps detected');
     console.log('  -> PASS: detected student traps count:', pitfallsRes.result.pitfall_count);
 
+    // 8. Annotate action
+    console.log('[TEST 8] Testing annotate (6-point TRCE synthesis & injection)...');
+    const testRCode = 'calculate_mean <- function(x) {\n  sum(x) / length(x)\n}\n';
+    const annotateRes = await send('annotate', { code: testRCode, prefix: 'trce-mean', style: 'jsdoc' });
+    assert.strictEqual(annotateRes.ok, true, 'annotate should succeed');
+    assert.strictEqual(annotateRes.result.inserted_count >= 1, true, 'should insert annotations');
+    assert.strictEqual(annotateRes.result.annotated_text.includes('@trce-id'), true, 'annotated text must contain @trce-id');
+    console.log('  -> PASS: annotate synthesized and injected doc-comments (inserted:', annotateRes.result.inserted_count, ')');
+
     console.log('\n================================================================');
-    console.log('  ALL R WORKER TESTS PASSED SUCCESSFULLY! (7/7)');
+    console.log('  ALL R WORKER TESTS PASSED SUCCESSFULLY! (8/8)');
     console.log('================================================================');
     process.exit(0);
   } catch (err) {

@@ -114,14 +114,18 @@ studio_files_pane_server <- function(input, output, session, state) {
       div(style = "display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap;",
         span(class = "rt-chip rt-chip-accent", crumb_txt),
         if (!identical(normalizePath(dir), normalizePath(state$wd()))) {
-          actionButton("files_use_wd", "Use as working directory", class = "rtrce-btn btn-xs")
+          tagList(
+            actionButton("files_open_as_project", "Open Project Here", class = "rtrce-btn btn-xs"),
+            actionButton("files_use_wd", "Set as WD", class = "rtrce-btn btn-xs")
+          )
         } else {
-          span(class = "rt-chip rt-chip-ok", "session folder")
+          span(class = "rt-chip rt-chip-ok", "project folder")
         }
       ),
       div(style = "display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;",
+        actionButton("files_open_project_modal", "Open Project...", class = "rtrce-btn btn-xs"),
         actionButton("files_up", "↑ Up", class = "rtrce-btn btn-xs"),
-        actionButton("files_go_home", "Session folder", class = "rtrce-btn btn-xs"),
+        actionButton("files_go_home", "Project root", class = "rtrce-btn btn-xs"),
         actionButton("files_refresh", "Refresh", class = "rtrce-btn btn-xs")
       ),
       div(style = "max-height: 62vh; overflow:auto;",
@@ -165,6 +169,53 @@ studio_files_pane_server <- function(input, output, session, state) {
       state$touch()                     # the status bar shows the directory
       showNotification(sprintf("Working directory is now %s", current_dir()),
                        type = "message")
+    }, error = function(e) {
+      showNotification(conditionMessage(e), type = "error")
+    })
+  })
+
+  observeEvent(input$files_open_as_project, {
+    tryCatch({
+      res <- session_open_project(state$live(), current_dir())
+      navigated(NULL)
+      state$touch()
+      msg <- sprintf("Opened project '%s' (%d R files)", res$project$name, res$project$r_files_count)
+      if (res$renviron_loaded) msg <- paste0(msg, " [.Renviron loaded]")
+      if (res$rprofile_loaded) msg <- paste0(msg, " [.Rprofile sourced]")
+      showNotification(msg, type = "message")
+    }, error = function(e) {
+      showNotification(conditionMessage(e), type = "error")
+    })
+  })
+
+  observeEvent(input$files_open_project_modal, {
+    showModal(modalDialog(
+      title = "Open R Project Directory",
+      easyClose = TRUE,
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("files_confirm_open_project", "Open Project", class = "rtrce-btn btn-sm btn-primary")
+      ),
+      textInput("files_project_input_path", "Project Directory Path:", value = current_dir(), width = "100%"),
+      p(class = "rt-xs text-muted", "Specify an R project or package directory. The session will reset to the project root and load any .Rprofile/.Renviron.")
+    ))
+  })
+
+  observeEvent(input$files_confirm_open_project, {
+    target_path <- trimws(input$files_project_input_path %||% "")
+    removeModal()
+    if (!nzchar(target_path) || !dir.exists(target_path)) {
+      showNotification(sprintf("Directory does not exist: '%s'", target_path), type = "error")
+      return()
+    }
+    tryCatch({
+      res <- session_open_project(state$live(), target_path)
+      navigated(NULL)
+      state$touch()
+      msg <- sprintf("Opened project '%s' (%d R files)", res$project$name, res$project$r_files_count)
+      if (res$renviron_loaded) msg <- paste0(msg, " [.Renviron loaded]")
+      if (res$rprofile_loaded) msg <- paste0(msg, " [.Rprofile sourced]")
+      showNotification(msg, type = "message")
     }, error = function(e) {
       showNotification(conditionMessage(e), type = "error")
     })
@@ -259,6 +310,8 @@ studio_plots_pane_server <- function(input, output, session, state) {
           tags$a(href = latest$web_path, target = "_blank", rel = "noopener",
                  class = "rtrce-btn btn-xs", "Open full size")
         },
+        downloadButton("plots_download_png", "PNG", class = "rtrce-btn btn-xs"),
+        downloadButton("plots_download_pdf", "PDF", class = "rtrce-btn btn-xs"),
         actionButton("plots_clear", "Clear", class = "rtrce-btn btn-xs")
       ),
 
@@ -292,6 +345,47 @@ studio_plots_pane_server <- function(input, output, session, state) {
     )
   })
 
+  output$plots_download_png <- downloadHandler(
+    filename = function() {
+      sprintf("rtrce_plot_%s.png", format(Sys.time(), "%Y%m%d_%H%M%S"))
+    },
+    content = function(file) {
+      plots <- state$live()$plots
+      if (length(plots) == 0) return()
+      latest <- plots[[length(plots)]]
+      if (!is.null(latest$file) && file.exists(latest$file)) {
+        file.copy(latest$file, file, overwrite = TRUE)
+      }
+    },
+    contentType = "image/png"
+  )
+
+  output$plots_download_pdf <- downloadHandler(
+    filename = function() {
+      sprintf("rtrce_plot_%s.pdf", format(Sys.time(), "%Y%m%d_%H%M%S"))
+    },
+    content = function(file) {
+      plots <- state$live()$plots
+      if (length(plots) == 0) return()
+      latest <- plots[[length(plots)]]
+      if (!is.null(latest$file) && file.exists(latest$file)) {
+        # Convert PNG to single-page PDF via base graphics device
+        img <- tryCatch(png::readPNG(latest$file), error = function(e) NULL)
+        grDevices::pdf(file, width = 8, height = 6)
+        on.exit(grDevices::dev.off(), add = TRUE)
+        if (!is.null(img)) {
+          graphics::par(mar = c(0, 0, 0, 0))
+          graphics::plot(c(0, 1), c(0, 1), type = "n", axes = FALSE, xlab = "", ylab = "")
+          graphics::rasterImage(img, 0, 0, 1, 1)
+        } else {
+          graphics::plot.new()
+          graphics::text(0.5, 0.5, "Plot export preview", cex = 1.2)
+        }
+      }
+    },
+    contentType = "application/pdf"
+  )
+
   observeEvent(input$plots_clear, {
     state$live()$plots <- list()
     state$touch()
@@ -319,8 +413,8 @@ studio_plots_pane_server <- function(input, output, session, state) {
 studio_packages_pane_server <- function(input, output, session, state) {
   installed_cache <- reactiveVal(NULL)
 
-  ensure_installed <- function() {
-    if (is.null(installed_cache())) {
+  ensure_installed <- function(refresh = FALSE) {
+    if (refresh || is.null(installed_cache())) {
       pkgs <- tryCatch(
         as.data.frame(installed.packages()[, c("Package", "Version", "LibPath")],
                       stringsAsFactors = FALSE),
@@ -331,6 +425,38 @@ studio_packages_pane_server <- function(input, output, session, state) {
     }
     installed_cache()
   }
+
+  observeEvent(input$packages_refresh_btn, {
+    ensure_installed(refresh = TRUE)
+    state$touch()
+    showNotification("Package list refreshed.", type = "message")
+  })
+
+  observeEvent(input$packages_install_modal_btn, {
+    showModal(modalDialog(
+      title = "Install R Package",
+      textInput("pkg_to_install", "Package Name:", placeholder = "e.g. ggplot2, dplyr, tidyr"),
+      p(class = "rt-xs", style = "color: var(--rt-text-muted);",
+        "Packages will be installed from CRAN into your user library. Progress and messages will appear in the Console."),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("pkg_confirm_install", "Install Package", class = "btn-primary")
+      ),
+      easyClose = TRUE
+    ))
+  })
+
+  observeEvent(input$pkg_confirm_install, {
+    pkg_name <- trimws(input$pkg_to_install %||% "")
+    removeModal()
+    if (!nzchar(pkg_name)) return()
+
+    showNotification(sprintf("Installing package '%s'...", pkg_name), type = "message", duration = 5)
+    install_cmd <- sprintf("install.packages('%s', repos = 'https://cloud.r-project.org')", pkg_name)
+    state$run(install_cmd, label = "package_install")
+    ensure_installed(refresh = TRUE)
+    state$touch()
+  })
 
   output$packages_pane_ui <- renderUI({
     state$revision()
@@ -372,14 +498,16 @@ studio_packages_pane_server <- function(input, output, session, state) {
     pkgs <- pkgs[order(pkgs$.rank, tolower(pkgs$Package)), , drop = FALSE]
 
     tagList(
-      div(style = "display:flex; gap:6px; align-items:center; margin-bottom:8px;",
+      div(style = "display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;",
         span(class = "rt-chip", sprintf("%d package(s)", nrow(pkgs))),
-        span(class = "rt-chip rt-chip-accent", sprintf("%d imported here", length(imports)))
+        span(class = "rt-chip rt-chip-accent", sprintf("%d imported here", length(imports))),
+        actionButton("packages_install_modal_btn", "Install…", class = "rtrce-btn btn-xs btn-primary", style = "margin-left:auto;"),
+        actionButton("packages_refresh_btn", "↻ Refresh", class = "rtrce-btn btn-xs")
       ),
       div(class = "rtrce-field",
         textInput("packages_filter", NULL, placeholder = "Filter packages…", width = "100%")
       ),
-      div(style = "max-height: 62vh; overflow:auto;",
+      div(style = "max-height: 58vh; overflow:auto;",
         if (nrow(pkgs) == 0) {
           div(class = "rtrce-empty",
             div(class = "rtrce-empty-title", "No match"),
@@ -395,7 +523,7 @@ studio_packages_pane_server <- function(input, output, session, state) {
         }
       ),
       p(class = "rt-xs", style = "color: var(--rt-text-faint); margin-top:8px;",
-        "Install one with install.packages(\"name\") in the console.")
+        "Click 'Install…' above or run install.packages(\"name\") in the console.")
     )
   })
 }
@@ -409,14 +537,44 @@ studio_packages_pane_server <- function(input, output, session, state) {
 # /**
 #  * @trce-id trce-pane-005
 #  * @trce-who Studio Help Pane / R Learner
-#  * @trce-what Renders the in-app reference: keyboard shortcuts, the TRCE six-point rubric, and the archetype/coverage glossary
-#  * @trce-when When the Help rail tab is shown
-#  * @trce-where R/studio_panes.R -> studio_help_pane_server | Upstream: app.R rail tabset | Downstream: Leaf node / standard library
-#  * @trce-why Every term the interface uses (archetype, coverage, trace id) is defined here, so the Studio never assumes vocabulary the reader has not met
-#  * @trce-how Returns static content grouped into short sections; the glossary is the same vocabulary the CLI prints
+#  * @trce-what Renders dynamic R documentation for queried topics alongside the in-app reference guide
+#  * @trce-when When the Help rail tab is shown or when a topic is queried via ?topic or search input
+#  * @trce-where R/studio_panes.R -> studio_help_pane_server | Upstream: app.R rail tabset | Downstream: resolve_r_help (R/runtime.R)
+#  * @trce-why Provides built-in function and package documentation directly inside the IDE without context-switching
+#  * @trce-how Queries resolve_r_help(), renders formatted HTML Rd output, and provides toggle between active topic doc and IDE shortcuts
 #  */
-studio_help_pane_server <- function(input, output, session) {
+studio_help_pane_server <- function(input, output, session, state = NULL) {
+  # Active topic query state
+  help_view_mode <- reactiveVal("doc") # "doc" or "reference"
+
+  observe({
+    req(state)
+    topic <- state$help_topic()
+    if (!is.null(topic) && nzchar(trimws(topic))) {
+      help_view_mode("doc")
+    }
+  })
+
+  observeEvent(input$help_search_btn, {
+    val <- trimws(input$help_search_query %||% "")
+    if (nzchar(val) && !is.null(state)) {
+      state$help_topic(val)
+      help_view_mode("doc")
+    }
+  })
+
+  observeEvent(input$help_mode_ref, {
+    help_view_mode("reference")
+  })
+
+  observeEvent(input$help_mode_doc, {
+    help_view_mode("doc")
+  })
+
   output$help_pane_ui <- renderUI({
+    current_topic <- if (!is.null(state)) state$help_topic() else NULL
+    mode <- help_view_mode()
+
     shortcut <- function(keys, what) {
       div(style = "display:flex; gap:8px; align-items:baseline; margin-bottom:4px;",
         span(style = "min-width:150px;", tags$kbd(keys)),
@@ -430,7 +588,60 @@ studio_help_pane_server <- function(input, output, session) {
       )
     }
 
+    # Header with search bar and switcher
+    header_bar <- div(style = "margin-bottom: 10px;",
+      div(style = "display: flex; gap: 6px; align-items: center; margin-bottom: 8px;",
+        div(style = "flex: 1 1 auto;",
+          textInput("help_search_query", NULL,
+                    value = current_topic %||% "",
+                    placeholder = "Search R help (e.g. mean, lm, plot)…",
+                    width = "100%")
+        ),
+        actionButton("help_search_btn", "Search", class = "rtrce-btn btn-sm")
+      ),
+      div(style = "display: flex; gap: 6px; align-items: center;",
+        actionButton("help_mode_doc", "Topic Doc",
+                     class = paste("rtrce-btn btn-xs", if (identical(mode, "doc")) "btn-primary" else "")),
+        actionButton("help_mode_ref", "Quick Reference",
+                     class = paste("rtrce-btn btn-xs", if (identical(mode, "reference")) "btn-primary" else "")),
+        if (!is.null(current_topic) && nzchar(current_topic)) {
+          span(class = "rt-chip rt-chip-accent", style = "margin-left: auto;", current_topic)
+        }
+      )
+    )
+
+    if (identical(mode, "doc")) {
+      if (is.null(current_topic) || !nzchar(trimws(current_topic))) {
+        return(tagList(
+          header_bar,
+          div(class = "rtrce-empty",
+            div(class = "rtrce-empty-icon", "?"),
+            div(class = "rtrce-empty-title", "No topic queried"),
+            p(class = "rt-xs", "Type '?function_name' in the console or enter a topic above (e.g. 'mean', 'data.frame', 'ggplot')."),
+            actionButton("help_try_mean", "Look up mean()", class = "rtrce-btn btn-xs",
+                         onclick = "Shiny.setInputValue('help_search_query', 'mean'); document.getElementById('help_search_btn').click();")
+          )
+        ))
+      }
+
+      doc_res <- tryCatch(resolve_r_help(current_topic), error = function(e) {
+        list(found = FALSE, title = "Error", html = paste0("<p>Error resolving documentation: ", htmltools::htmlEscape(conditionMessage(e)), "</p>"))
+      })
+
+      return(tagList(
+        header_bar,
+        div(class = "rtrce-card rtrce-help-container",
+          style = "max-height: 65vh; overflow-y: auto; padding: 14px; background: var(--rt-base); border-radius: 8px;",
+          h4(style = "margin-top: 0;", doc_res$title %||% current_topic),
+          hr(style = "border-color: var(--rt-border-plain); margin: 8px 0 12px;"),
+          HTML(doc_res$html)
+        )
+      ))
+    }
+
+    # Reference mode (the original static guides)
     tagList(
+      header_bar,
       div(class = "rtrce-teach",
         h5("Edit and run"),
         shortcut("Ctrl / Cmd + Enter", "Run the selection, or the whole statement at the cursor"),
@@ -526,6 +737,7 @@ studio_chrome_server <- function(input, output, session, state) {
       span(class = "rt-sb-item", sprintf("%d object(s)", objects)),
       span(class = "rt-sb-item", sprintf("%d command(s)", commands)),
       span(class = "rt-sb-item rt-sb-spacer"),
+      span(class = "rt-sb-item rt-sb-ok", title = "Dedicated to Cassie, eternal coding companion", "\U0001F43E Cassie Edition"),
       coverage_chip,
       span(class = "rt-sb-item", R.version.string),
       span(class = "rt-sb-item", "Press ? for shortcuts")

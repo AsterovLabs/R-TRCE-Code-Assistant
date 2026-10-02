@@ -1,0 +1,166 @@
+[
+  {
+    "id": "variable_binding",
+    "name": "Variable Binding",
+    "why": "Assigning a value to a name lets you store data in memory and refer to it repeatedly without recalculating or retyping it.",
+    "prerequisites": []
+  },
+  {
+    "id": "data_structures",
+    "name": "Data Structures",
+    "why": "Grouping related values into collections like vectors, lists, or tables allows you to organize and work with multiple data points together.",
+    "prerequisites": [
+      "variable_binding"
+    ]
+  },
+  {
+    "id": "indexing",
+    "name": "Indexing",
+    "why": "Using a position, name, or condition allows you to look up, extract, or update specific elements inside a collection.",
+    "prerequisites": [
+      "data_structures"
+    ]
+  },
+  {
+    "id": "boolean_logic",
+    "name": "Boolean Logic",
+    "why": "Evaluating expressions into true or false outcomes allows programs to make decisions and control which code runs.",
+    "prerequisites": [
+      "variable_binding"
+    ]
+  },
+  {
+    "id": "equality_comparison",
+    "name": "Equality Comparison",
+    "why": "Checking whether two values are identical lets your code verify expectations and branch based on whether data matches.",
+    "prerequisites": [
+      "boolean_logic"
+    ]
+  },
+  {
+    "id": "type_coercion",
+    "name": "Type Coercion",
+    "why": "When an operation expects one kind of data but receives another, the language may quietly convert it behind the scenes, sometimes causing subtle surprises.",
+    "prerequisites": [
+      "variable_binding"
+    ]
+  },
+  {
+    "id": "scope",
+    "name": "Scope",
+    "why": "Scope sets the boundaries where a variable exists and can be seen, preventing names used in one part of a program from accidentally overwriting names elsewhere.",
+    "prerequisites": [
+      "variable_binding"
+    ]
+  },
+  {
+    "id": "function_definition",
+    "name": "Function Definition",
+    "why": "Packaging a set of instructions into a reusable named block lets you run that logic with different inputs without duplicating code.",
+    "prerequisites": [
+      "scope"
+    ]
+  },
+  {
+    "id": "closure",
+    "name": "Closure",
+    "why": "A function carries the environment it was born in. That means it can use variables that were in scope when it was created, even after that scope has ended.",
+    "prerequisites": [
+      "function_definition",
+      "scope"
+    ]
+  },
+  {
+    "id": "environment_mutation",
+    "name": "Environment Mutation",
+    "why": "Modifying variables outside the current local function scope alters shared state, which can create side effects that are hard to trace and debug.",
+    "prerequisites": [
+      "closure",
+      "scope"
+    ]
+  },
+  {
+    "id": "module_system",
+    "name": "Module System",
+    "why": "Packaging code into separate libraries or modules lets you reuse external functionality while keeping distinct namespaces so names do not collide.",
+    "prerequisites": [
+      "scope"
+    ]
+  },
+  {
+    "id": "search_path",
+    "name": "Search Path",
+    "why": "When you write a bare name, the runtime looks through an ordered sequence of environments and loaded packages to decide which matching definition wins.",
+    "prerequisites": [
+      "scope",
+      "module_system"
+    ]
+  },
+  {
+    "id": "iteration",
+    "name": "Iteration",
+    "why": "Repeating a set of actions across a collection or until a target is reached automates repetitive work instead of writing the same steps over and over.",
+    "prerequisites": [
+      "variable_binding"
+    ]
+  },
+  {
+    "id": "vectorisation",
+    "name": "Vectorisation",
+    "why": "Applying an operation to an entire collection at once lets the computer process all items together without writing a manual loop.",
+    "prerequisites": [
+      "iteration",
+      "data_structures"
+    ]
+  },
+  {
+    "id": "recycling",
+    "name": "Recycling",
+    "why": "When an operation pairs collections of different lengths, the runtime repeats elements from the shorter one to match the longer one.",
+    "prerequisites": [
+      "vectorisation"
+    ]
+  },
+  {
+    "id": "pipe_chain",
+    "name": "Pipe Chaining",
+    "why": "Directing the output of one step straight into the input of the next lets you read data transformations in a clear, left-to-right flow.",
+    "prerequisites": [
+      "function_definition"
+    ]
+  },
+  {
+    "id": "mutability",
+    "name": "Mutability",
+    "why": "Determines whether changing a collection alters the original data everywhere it is referenced, or creates an independent copy with the changes.",
+    "prerequisites": [
+      "variable_binding",
+      "data_structures"
+    ]
+  },
+  {
+    "id": "missing_data",
+    "name": "Missing Data",
+    "why": "Representing absent or unknown observations with dedicated placeholders prevents missing values from being confused with real data like zero or false.",
+    "prerequisites": [
+      "data_structures",
+      "equality_comparison"
+    ]
+  },
+  {
+    "id": "error_handling",
+    "name": "Error Handling",
+    "why": "Catching unexpected issues as they occur allows your program to recover gracefully or give a helpful explanation rather than crashing abruptly.",
+    "prerequisites": [
+      "function_definition"
+    ]
+  },
+  {
+    "id": "string_manipulation",
+    "name": "String Manipulation",
+    "why": "Examining, splicing, formatting, and searching pieces of text lets programs clean messy input and generate readable messages.",
+    "prerequisites": [
+      "variable_binding"
+    ]
+  }
+]

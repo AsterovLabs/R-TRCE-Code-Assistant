@@ -49,6 +49,11 @@ studio_editor_ui <- function(initial_code = "", filename = "sample.R") {
       .rtrce-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
       .rtrce-toolbar .btn { font-weight: 600; }
       .rtrce-editor-host { flex: 1 1 auto; min-height: 320px; }
+      .rtrce-tab-strip { display: flex; align-items: center; gap: 4px; overflow-x: auto; margin-bottom: 6px; border-bottom: 1px solid var(--rt-border-plain, #313244); padding-bottom: 2px; }
+      .rtrce-tab-item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 12px; font-family: var(--rt-font-mono, monospace); border-radius: 6px 6px 0 0; background: var(--rt-mantle, #181825); color: var(--rt-text-muted, #a6adc8); cursor: pointer; border: 1px solid transparent; border-bottom: none; }
+      .rtrce-tab-item.active { background: var(--rt-base, #1e1e2e); color: var(--rt-text, #cdd6f4); border-color: var(--rt-border-plain, #313244); font-weight: 600; }
+      .rtrce-tab-close { font-size: 11px; padding: 0 4px; border-radius: 4px; opacity: 0.6; cursor: pointer; }
+      .rtrce-tab-close:hover { opacity: 1; background: var(--rt-surface-1, #45475a); color: var(--rt-red, #f38ba8); }
       textarea.rtrce-editor { width: 100%; }
     ")),
     div(class = "card rtrce-editor-shell",
@@ -56,10 +61,12 @@ studio_editor_ui <- function(initial_code = "", filename = "sample.R") {
         actionButton("editor_run_line", "▶ Run Line / Selection", class = "btn-primary btn-sm"),
         actionButton("editor_run_all", "⏩ Run All", class = "btn-default btn-sm"),
         actionButton("editor_save", "💾 Save", class = "btn-default btn-sm"),
+        actionButton("editor_new_script", "+ New Script", class = "btn-default btn-sm"),
+        actionButton("editor_knit_btn", "🧶 Knit / Render", class = "btn-default btn-sm"),
         span(class = "rtrce-status", textOutput("editor_status", inline = TRUE))
       ),
+      uiOutput("editor_tabs_bar"),
       div(class = "rtrce-editor-host",
-        p(class = "rt-mono-soft", style = "margin: 0 0 4px; font-size: 12px;", filename),
         # Exactly one child. htmltools indents *each* child of a textarea, so a
         # second child (a filename, say) would be injected into the document as
         # indented text -- it appeared as a stray first line in the editor.
@@ -208,4 +215,52 @@ studio_editor_server <- function(input, output, session, state) {
 
   observeEvent(input$editor_save, save_document())
   observeEvent(input$editor_save_request, save_document())
+
+  # --- document tab strip ----------------------------------------------------
+  output$editor_tabs_bar <- renderUI({
+    if (is.null(state$docs)) {
+      return(div(class = "rt-mono-soft", style = "margin: 0 0 4px; font-size: 12px;", state$filename()))
+    }
+    docs <- state$docs()
+    active_id <- state$active_doc()
+
+    div(class = "rtrce-tab-strip",
+      lapply(docs, function(doc) {
+        is_active <- identical(doc$id, active_id)
+        div(
+          class = paste("rtrce-tab-item", if (is_active) "active" else ""),
+          onclick = sprintf("Shiny.setInputValue('editor_tab_click', '%s', {priority: 'event'});", doc$id),
+          span(doc$name),
+          if (length(docs) > 1) {
+            span(
+              class = "rtrce-tab-close",
+              title = "Close tab",
+              onclick = sprintf("event.stopPropagation(); Shiny.setInputValue('editor_tab_close', '%s', {priority: 'event'});", doc$id),
+              "✕"
+            )
+          }
+        )
+      })
+    )
+  })
+
+  observeEvent(input$editor_tab_click, {
+    req(input$editor_tab_click)
+    if (!is.null(state$switch_doc)) {
+      state$switch_doc(input$editor_tab_click)
+    }
+  })
+
+  observeEvent(input$editor_tab_close, {
+    req(input$editor_tab_close)
+    if (!is.null(state$close_doc)) {
+      state$close_doc(input$editor_tab_close)
+    }
+  })
+
+  observeEvent(input$editor_new_script, {
+    if (!is.null(state$new_doc)) {
+      state$new_doc()
+    }
+  })
 }

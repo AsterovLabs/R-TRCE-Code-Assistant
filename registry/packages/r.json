@@ -1,0 +1,102 @@
+{
+  "ggplot2": {
+    "name": "ggplot2",
+    "domain": "Data Visualization",
+    "role": "Implements Leland Wilkinson's 'Grammar of Graphics'. Composes charts in independent layers: data + aesthetic mappings (aes) + geometric shapes (geom_*) + scales."
+  },
+  "dplyr": {
+    "name": "dplyr",
+    "domain": "Data Manipulation",
+    "role": "Provides a consistent grammar of data transformation. Core verbs: filter (rows), select (columns), mutate (new columns), summarise (aggregations), and arrange (sorting)."
+  },
+  "tidyr": {
+    "name": "tidyr",
+    "domain": "Data Tidying",
+    "role": "Helps format data so each variable is a column and each observation is a row using pivot_longer() and pivot_wider()."
+  },
+  "shiny": {
+    "name": "shiny",
+    "domain": "Interactive Web Applications",
+    "role": "Turns R code into interactive dashboards. Separates UI layout from reactive server logic via an event-driven reactive dependency graph."
+  },
+  "readr": {
+    "name": "readr",
+    "domain": "Data Import",
+    "role": "Reads rectangular data (CSV, TSV, fixed-width) fast, with automatic column type parsing and reproducible parsing issues reporting."
+  },
+  "purrr": {
+    "name": "purrr",
+    "domain": "Functional Programming",
+    "role": "Replaces for-loops with type-safe iteration tools (map, map_dfr, walk) promoting pure, vector-oriented programming."
+  },
+  "tibble": {
+    "name": "tibble",
+    "domain": "Data Structures",
+    "role": "A modern reimagining of R data frames. Never changes variable names or types silently, and prints previews cleanly."
+  },
+  "stringr": {
+    "name": "stringr",
+    "domain": "String Manipulation",
+    "role": "Provides consistent string operations prefixed with 'str_' based on the ICU library."
+  },
+  "forcats": {
+    "name": "forcats",
+    "domain": "Factor Handling",
+    "role": "Tools for categorical variables: reordering levels (fct_reorder), lumping rare levels (fct_lump), and recoding."
+  },
+  "jsonlite": {
+    "name": "jsonlite",
+    "domain": "Data Serialization",
+    "role": "Fast, robust JSON parser and generator for bidirectional R-to-JSON data interchange."
+  },
+  "data.table": {
+    "name": "data.table",
+    "domain": "High-Performance Data Manipulation",
+    "role": "High-performance alternative to data frames using concise DT[i, j, by] syntax for filtering rows (i), calculating columns (j), and grouping (by). Highly optimized for large datasets with in-place modifications (:=) and fast file reading with fread()."
+  },
+  "lubridate": {
+    "name": "lubridate",
+    "domain": "Date/Time Handling",
+    "role": "Simplifies working with date and time data in R. Provides intuitive functions to parse character strings (ymd, mdy), extract components (year, month), and perform arithmetic using durations and periods."
+  },
+  "httr2": {
+    "name": "httr2",
+    "domain": "HTTP Client",
+    "role": "Modern HTTP client for interacting with web APIs and network resources. Uses piped workflows to construct requests (request), configure authentication and headers, and parse structured responses (resp_body_json)."
+  },
+  "rvest": {
+    "name": "rvest",
+    "domain": "Web Scraping",
+    "role": "Makes web scraping simple by reading and extracting data from HTML web pages. Uses CSS selectors or XPath expressions via read_html(), html_elements(), and html_text2() to turn web pages into tidy data."
+  },
+  "testthat": {
+    "name": "testthat",
+    "domain": "Unit Testing",
+    "role": "R's standard unit testing framework for verifying that code works as expected. Organizes test assertions into test_that() blocks using clear expectations such as expect_equal(), expect_true(), and expect_error()."
+  },
+  "lme4": {
+    "name": "lme4",
+    "domain": "Mixed-Effects Models",
+    "role": "Fits linear (lmer) and generalized linear (glmer) mixed-effects models that include both fixed and random effects. Designed for analyzing hierarchical, clustered, or repeated-measures experimental data."
+  },
+  "survival": {
+    "name": "survival",
+    "domain": "Survival Analysis",
+    "role": "The core R package for time-to-event and survival data analysis. Builds survival objects using Surv(), computes Kaplan-Meier survival curves with survfit(), and fits Cox proportional hazards models using coxph()."
+  },
+  "caret": {
+    "name": "caret",
+    "domain": "Machine Learning",
+    "role": "Provides a unified interface for building, training, and evaluating predictive machine learning models. Simplifies workflows for data splitting, feature pre-processing, and hyperparameter tuning with the train() function."
+  },
+  "rmarkdown": {
+    "name": "rmarkdown",
+    "domain": "Reproducible Documents",
+    "role": "Authoring framework for data science that combines narrative text with executable R code chunks. Uses knitr and Pandoc to compile reproducible documents into HTML, PDF, or Microsoft Word formats."
+  },
+  "devtools": {
+    "name": "devtools",
+    "domain": "Package Development",
+    "role": "A suite of developer tools that streamlines the process of building and maintaining R packages. Automates common development tasks including code reloading (load_all), documentation generation (document), and running test suites (test)."
+  }
+}

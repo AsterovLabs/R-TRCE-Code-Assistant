@@ -1,0 +1,122 @@
+[
+  {
+    "universal_id": "variable_binding",
+    "pattern": "<-|<<-|=(?!=)",
+    "hint": "Use `<-` for assignment as it is the standard R convention and clearly signals value assignment.",
+    "trap": "Using `=` for assignment can cause issues in function calls, where `=` is interpreted as setting a named argument rather than assigning a variable in the calling scope."
+  },
+  {
+    "universal_id": "data_structures",
+    "pattern": "\\b(vector|list|data\\.frame|matrix|array|tibble)\\s*\\(",
+    "hint": "In R, atomic vectors are the fundamental building blocks of all data; matrices, lists, and data frames are built on top of them.",
+    "trap": "There is no true scalar type in R: a single number like 42 is actually a numeric vector of length 1, which can cause unexpected results in length checks."
+  },
+  {
+    "universal_id": "indexing",
+    "pattern": "\\[|\\$|\\[\\[",
+    "hint": "R uses 1-based indexing, meaning the first element is at index 1, not 0.",
+    "trap": "Subsetting a single column with `df[, 1]` drops data frame dimensions and simplifies to a vector by default; pass `drop = FALSE` (`df[, 1, drop = FALSE]`) to keep it as a data frame."
+  },
+  {
+    "universal_id": "boolean_logic",
+    "pattern": "&&|\\|\\||&(?!&)|\\|(?!\\|)|!(?!=)",
+    "hint": "Use `&&` and `||` for single conditional checks (like inside `if` statements) because they short-circuit; use `&` and `|` for element-wise comparisons across vectors.",
+    "trap": "Using `&&` or `||` on a vector evaluates only the very first element and ignores the rest, often yielding silent logical bugs in data filtering."
+  },
+  {
+    "universal_id": "equality_comparison",
+    "pattern": "==|!=|identical\\(|all\\.equal\\(",
+    "hint": "`==` compares elements pair-by-pair and automatically recycles shorter vectors to match longer ones.",
+    "trap": "Directly comparing decimal numbers with `==` often fails due to floating-point rounding errors (e.g., `0.1 + 0.2 == 0.3` evaluates to `FALSE`); use `all.equal()` or check differences against a tolerance."
+  },
+  {
+    "universal_id": "type_coercion",
+    "pattern": "as\\.(numeric|character|integer|logical|double)\\s*\\(",
+    "hint": "R automatically coerces types in mixed operations along a hierarchy: logical -> integer -> double -> complex -> character (e.g., `TRUE + 2` becomes numeric 3).",
+    "trap": "Calling `as.numeric()` directly on a factor returns its underlying integer level codes rather than the displayed values; convert to character first with `as.numeric(as.character(f))`."
+  },
+  {
+    "universal_id": "scope",
+    "pattern": "environment\\(|parent\\.env|new\\.env|\\bls\\(",
+    "hint": "Unlike some languages with block scoping, curly-brace `{}` blocks inside an R function share the function's single execution environment.",
+    "trap": "For-loops do not create a private scope in R; loop iteration variables remain defined in the surrounding environment and can silently overwrite existing variables."
+  },
+  {
+    "universal_id": "function_definition",
+    "pattern": "function\\s*\\(",
+    "hint": "Functions are first-class objects in R: you can assign them to variables, pass them as arguments to other functions, and return them from functions.",
+    "trap": "R automatically returns the value of the last evaluated expression in a function body, which can return unintended results if you forget to place the desired return object last."
+  },
+  {
+    "universal_id": "closure",
+    "pattern": "function\\s*\\(",
+    "hint": "A function created inside another function retains access to the enclosing function's variables, forming a closure that encapsulates state.",
+    "trap": "Using `<<-` inside a closure mutates state in an outer environment, creating hidden side effects that make code difficult to debug and test."
+  },
+  {
+    "universal_id": "environment_mutation",
+    "pattern": "<<-",
+    "hint": "The super-assignment operator `<<-` walks up the parent environment chain until it finds the variable name to reassign, or creates it in the global environment.",
+    "trap": "Mutating external environments with `<<-` is not visible in the function arguments or return value, breaking function purity and making execution order unpredictable."
+  },
+  {
+    "universal_id": "search_path",
+    "pattern": "\\battach\\s*\\(|\\bdetach\\s*\\(|search\\(",
+    "hint": "Loading packages with `library()` places their namespaces on the search path, where functions from newly loaded packages shadow identical names from earlier ones.",
+    "trap": "Using `attach()` exposes data frame columns as bare variables in the search path, which easily masks base functions, conflicts with user variables, and leads to stale data references."
+  },
+  {
+    "universal_id": "iteration",
+    "pattern": "^\\s*for\\s*\\(|^\\s*while\\s*\\(|^\\s*repeat\\b",
+    "hint": "For-loops in R evaluate code for side effects and return `NULL` invisibly; you must explicitly pre-allocate containers and store results on each iteration.",
+    "trap": "Growing an object incrementally using `x <- c(x, new_val)` inside a loop reallocates memory and copies the entire vector every iteration, resulting in severe performance slowdowns."
+  },
+  {
+    "universal_id": "vectorisation",
+    "pattern": "\\b(lapply|sapply|vapply|mapply|Map|apply|tapply)\\s*\\(",
+    "hint": "Vectorised operations and apply functions execute loops in underlying C code, transforming entire vectors at once with cleaner code and better performance.",
+    "trap": "`sapply()` automatically guesses its return type (vector, matrix, or list) based on runtime outputs; if the input is empty or of unexpected shape, it breaks downstream code — prefer `vapply()` with an explicit `FUN.VALUE`."
+  },
+  {
+    "universal_id": "recycling",
+    "pattern": "(\\+|-|\\*|/)\\s*[0-9]",
+    "hint": "When operating on two vectors of different lengths, R repeats (recycles) the shorter vector to match the length of the longer vector, making scalar-vector math straightforward.",
+    "trap": "R silently recycles if the longer length is an exact multiple of the shorter length with no warning; even when lengths do not divide evenly, R only emits a warning rather than stopping with an error."
+  },
+  {
+    "universal_id": "pipe_chain",
+    "pattern": "\\|>|%>%",
+    "hint": "Pipes pass the result of the left-hand expression as the first argument to the right-hand function: `x |> f(y)` is syntactic sugar for `f(x, y)`.",
+    "trap": "The base R pipe `|>` requires explicit parentheses on the function call on the right-hand side (`x |> f()`), unlike magrittr's `%>%` which permits bare function names like `x %>% f`."
+  },
+  {
+    "universal_id": "mutability",
+    "pattern": "<-",
+    "hint": "R uses copy-on-modify semantics: when you modify an object that shares memory with another reference, R creates a copy so other references remain unchanged.",
+    "trap": "Because of copy-on-modify, repeatedly appending rows with `rbind()` inside a loop duplicates the entire accumulating data frame on every step, causing quadratic O(n²) runtime."
+  },
+  {
+    "universal_id": "missing_data",
+    "pattern": "\\bNA\\b|\\bis\\.na\\s*\\(|\\bna\\.rm",
+    "hint": "`NA` represents unknown data and propagates through calculations; functions like `mean()` or `sum()` will return `NA` if any element is missing unless you explicitly pass `na.rm = TRUE`.",
+    "trap": "Comparing any value to `NA` using `x == NA` returns `NA` rather than `TRUE` or `FALSE`; always test for missing values using `is.na(x)`."
+  },
+  {
+    "universal_id": "error_handling",
+    "pattern": "\\b(tryCatch|try|withCallingHandlers|stop|warning|message)\\s*\\(",
+    "hint": "Use `tryCatch()` to intercept errors and warnings gracefully, providing fallback return values or cleanup handlers without crashing your program.",
+    "trap": "`warning()` reports issues without halting script execution, which means downstream calculations continue running with potentially invalid or corrupted intermediate data."
+  },
+  {
+    "universal_id": "module_system",
+    "pattern": "\\b(library|require)\\s*\\(|::",
+    "hint": "Referencing functions explicitly with the `package::function()` syntax prevents name collisions between packages and clearly documents package dependencies.",
+    "trap": "`require()` returns `FALSE` with a warning instead of halting when a package is missing, which can cause subtle cascade failures later; use `library()` in scripts so execution halts immediately if a dependency is absent."
+  },
+  {
+    "universal_id": "string_manipulation",
+    "pattern": "\\b(paste|paste0|sprintf|gsub|sub|grep|grepl|nchar|substr|strsplit)\\s*\\(",
+    "hint": "Use `paste0(...)` as a convenient shorthand for `paste(..., sep = \"\")` to concatenate strings without spaces, and use `sprintf()` for C-style string formatting.",
+    "trap": "`grep()` returns integer indices of matching elements while `grepl()` returns a logical vector (`TRUE`/`FALSE`); using `grep()` inside an `if()` statement or boolean filter can cause unexpected subsetting behavior."
+  }
+]

@@ -3,14 +3,19 @@
  */
 
 export interface ComponentItem {
-  index: number;
-  kind: string;
+  index?: number;
+  kind?: string;
   name: string;
+  type?: string;
   archetype?: string;
   args?: string[];
   calls?: string[];
-  line1: number;
-  line2: number;
+  calls_local?: string[];
+  called_by?: string[];
+  line1?: number;
+  line2?: number;
+  start_line?: number;
+  end_line?: number;
   code?: string;
   is_cli_runner?: boolean;
 }
@@ -58,21 +63,29 @@ export interface CheckResult {
 }
 
 export interface AnnotateResult {
-  original_lines: string[];
-  annotated_lines: string[];
+  original_lines?: string[];
+  annotated_lines?: string[];
+  original_text?: string;
   annotated_text: string;
   inserted_count: number;
-  components_annotated: number;
+  components_annotated?: number;
+  trace_ids?: string[];
 }
 
 export interface PitfallTrap {
+  id?: string;
   line: number;
-  trap: string;
+  trap?: string;
+  name?: string;
   title: string;
-  severity: 'warning' | 'error' | 'info';
-  description: string;
-  suggestion: string;
+  severity: 'warning' | 'error' | 'critical' | 'advisory' | 'info';
+  description?: string;
+  explanation?: string;
+  suggestion?: string;
+  recommendation?: string;
   code_snippet?: string;
+  code?: string;
+  replacement?: string;
 }
 
 export interface QuizQuestion {
@@ -117,6 +130,7 @@ export interface SampleScript {
   path: string;
   content: string;
   size: number;
+  language?: string;
 }
 
 export interface FileItem {
@@ -124,8 +138,51 @@ export interface FileItem {
   path: string;
   relPath: string;
   isDirectory: boolean;
-  isR: boolean;
+  isR?: boolean;
+  isPython?: boolean;
+  isJs?: boolean;
+  language?: string;
   size: number;
+}
+
+export interface RecentProject {
+  path: string;
+  name: string;
+  lastOpened: string;
+}
+
+export interface ProjectMetadata {
+  path: string;
+  name: string;
+  is_package: boolean;
+  package_name: string | null;
+  rproj_file: string | null;
+  renviron_file: string | null;
+  rprofile_file: string | null;
+  r_files_count: number;
+  r_files: string[];
+}
+
+export interface ProjectOverview {
+  metadata: ProjectMetadata;
+  validation: {
+    total_files: number;
+    total_targets: number;
+    annotated_targets: number;
+    coverage_pct: number;
+    all_valid: boolean;
+    duplicate_ids: string[];
+    missing_fields_count: number;
+  };
+  explanation?: {
+    text: string;
+    markdown: string;
+  };
+}
+
+export interface CurrentProjectInfo {
+  path: string;
+  name: string;
 }
 
 export type ThemeMode = 'mocha' | 'latte';
@@ -133,3 +190,4 @@ export type ThemeMode = 'mocha' | 'latte';
 export type SidebarTab = 'files' | 'ast' | 'trce' | 'pitfalls' | 'quiz';
 
 export type RightRailTab = 'workspace' | 'plots' | 'help';
+

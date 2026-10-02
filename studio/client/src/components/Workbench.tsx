@@ -7,6 +7,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { SidebarNav } from './Sidebar/SidebarNav';
 import { FileTree } from './Sidebar/FileTree';
 import { AstExplorer } from './Sidebar/AstExplorer';
+import { ErrorBoundary } from './ErrorBoundary';
 import { TrceInspector } from './Sidebar/TrceInspector';
 import { PitfallsView } from './Sidebar/PitfallsView';
 import { QuizView } from './Sidebar/QuizView';
@@ -32,8 +33,10 @@ interface WorkbenchProps {
   theme: ThemeMode;
   currentFile: string;
   code: string;
+  language?: string;
   onChangeCode: (code: string) => void;
   onOpenFile: (path: string) => void;
+  onNewScript?: () => void;
   onRunSelection: () => void;
   onSave: () => void;
   onCursorChange: (line: number, col: number) => void;
@@ -45,6 +48,9 @@ interface WorkbenchProps {
   quiz: QuizQuestion[];
   onGenerateQuiz: () => void;
   onAnnotate: () => void;
+  projectName?: string;
+  projectPath?: string;
+  onOpenFolder?: () => void;
   consoleEntries: ConsoleEntry[];
   onExecuteConsole: (cmd: string) => void;
   onClearConsole: () => void;
@@ -59,8 +65,10 @@ export const Workbench: React.FC<WorkbenchProps> = ({
   theme,
   currentFile,
   code,
+  language,
   onChangeCode,
   onOpenFile,
+  onNewScript,
   onRunSelection,
   onSave,
   onCursorChange,
@@ -72,6 +80,9 @@ export const Workbench: React.FC<WorkbenchProps> = ({
   quiz,
   onGenerateQuiz,
   onAnnotate,
+  projectName,
+  projectPath,
+  onOpenFolder,
   consoleEntries,
   onExecuteConsole,
   onClearConsole,
@@ -98,25 +109,34 @@ export const Workbench: React.FC<WorkbenchProps> = ({
       <PanelGroup direction="horizontal" className="flex-1">
         {/* Left Sidebar Panel */}
         <Panel defaultSize={22} minSize={15} maxSize={35} className="bg-rt-mantle border-r border-rt-surface-0 flex flex-col">
-          {activeSidebarTab === 'files' && (
-            <FileTree currentFile={currentFile} onOpenFile={onOpenFile} />
-          )}
-          {activeSidebarTab === 'ast' && (
-            <AstExplorer analysis={analysis} onSelectLine={onSelectLine} />
-          )}
-          {activeSidebarTab === 'trce' && (
-            <TrceInspector
-              checkResult={checkResult}
-              onAnnotate={onAnnotate}
-              onSelectLine={onSelectLine}
-            />
-          )}
-          {activeSidebarTab === 'pitfalls' && (
-            <PitfallsView pitfalls={pitfalls} onSelectLine={onSelectLine} />
-          )}
-          {activeSidebarTab === 'quiz' && (
-            <QuizView quiz={quiz} onGenerateQuiz={onGenerateQuiz} />
-          )}
+          <ErrorBoundary fallbackTitle="Sidebar Panel Error">
+            {activeSidebarTab === 'files' && (
+              <FileTree
+                currentFile={currentFile}
+                projectName={projectName}
+                projectPath={projectPath}
+                onOpenFile={onOpenFile}
+                onNewScript={onNewScript}
+                onOpenFolder={onOpenFolder}
+              />
+            )}
+            {activeSidebarTab === 'ast' && (
+              <AstExplorer analysis={analysis} onSelectLine={onSelectLine} />
+            )}
+            {activeSidebarTab === 'trce' && (
+              <TrceInspector
+                checkResult={checkResult}
+                onAnnotate={onAnnotate}
+                onSelectLine={onSelectLine}
+              />
+            )}
+            {activeSidebarTab === 'pitfalls' && (
+              <PitfallsView pitfalls={pitfalls} onSelectLine={onSelectLine} />
+            )}
+            {activeSidebarTab === 'quiz' && (
+              <QuizView quiz={quiz} onGenerateQuiz={onGenerateQuiz} />
+            )}
+          </ErrorBoundary>
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-rt-surface-0 hover:bg-rt-mauve transition cursor-col-resize select-none" />
@@ -126,28 +146,34 @@ export const Workbench: React.FC<WorkbenchProps> = ({
           <PanelGroup direction="vertical">
             {/* Monaco Editor */}
             <Panel defaultSize={65} minSize={25} className="bg-rt-base flex flex-col">
-              <MonacoEditor
-                value={code}
-                onChange={onChangeCode}
-                theme={theme}
-                onRunSelection={onRunSelection}
-                onSave={onSave}
-                onCursorChange={onCursorChange}
-                targetLine={targetLine}
-              />
+              <ErrorBoundary fallbackTitle="Editor Error">
+                <MonacoEditor
+                  value={code}
+                  onChange={onChangeCode}
+                  theme={theme}
+                  language={language}
+                  onRunSelection={onRunSelection}
+                  onSave={onSave}
+                  onCursorChange={onCursorChange}
+                  targetLine={targetLine}
+                />
+              </ErrorBoundary>
             </Panel>
 
             <PanelResizeHandle className="h-1 bg-rt-surface-0 hover:bg-rt-mauve transition cursor-row-resize select-none" />
 
             {/* R Console */}
             <Panel defaultSize={35} minSize={15} className="bg-rt-crust flex flex-col">
-              <RConsole
-                entries={consoleEntries}
-                onExecute={onExecuteConsole}
-                onClear={onClearConsole}
-                onResetSession={onResetSession}
-                isEvaluating={isEvaluating}
-              />
+              <ErrorBoundary fallbackTitle="Console Error">
+                <RConsole
+                  entries={consoleEntries}
+                  onExecute={onExecuteConsole}
+                  onClear={onClearConsole}
+                  onResetSession={onResetSession}
+                  isEvaluating={isEvaluating}
+                  language={language}
+                />
+              </ErrorBoundary>
             </Panel>
           </PanelGroup>
         </Panel>
@@ -191,18 +217,20 @@ export const Workbench: React.FC<WorkbenchProps> = ({
           </div>
 
           <div className="flex-1 overflow-hidden">
-            {activeRightRailTab === 'plots' && (
-              <PlotsPane plots={plots} />
-            )}
-            {activeRightRailTab === 'workspace' && (
-              <WorkspacePane
-                objects={workspaceObjects}
-                onRefresh={onRefreshWorkspace}
-              />
-            )}
-            {activeRightRailTab === 'help' && (
-              <HelpPane />
-            )}
+            <ErrorBoundary fallbackTitle="Inspector Panel Error">
+              {activeRightRailTab === 'plots' && (
+                <PlotsPane plots={plots} />
+              )}
+              {activeRightRailTab === 'workspace' && (
+                <WorkspacePane
+                  objects={workspaceObjects}
+                  onRefresh={onRefreshWorkspace}
+                />
+              )}
+              {activeRightRailTab === 'help' && (
+                <HelpPane />
+              )}
+            </ErrorBoundary>
           </div>
         </Panel>
       </PanelGroup>

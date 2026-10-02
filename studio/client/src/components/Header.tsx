@@ -2,14 +2,35 @@
  * studio/client/src/components/Header.tsx -- Studio Top Header & Toolbar
  */
 
-import React from 'react';
-import { Play, PlaySquare, FileCheck2, Save, Sun, Moon, ShieldCheck, Sparkles } from 'lucide-react';
-import { ThemeMode } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Play,
+  PlaySquare,
+  FileCheck2,
+  Save,
+  Sun,
+  Moon,
+  ShieldCheck,
+  Sparkles,
+  Folder,
+  FolderOpen,
+  FolderGit2,
+  ChevronDown,
+  History,
+  Info
+} from 'lucide-react';
+import { ThemeMode, RecentProject } from '../types';
 
 interface HeaderProps {
   currentFile: string;
   isModified: boolean;
   theme: ThemeMode;
+  projectName: string;
+  projectPath: string;
+  recentProjects: RecentProject[];
+  onOpenProjectModal: () => void;
+  onOpenRecentProject: (path: string) => void;
+  onShowProjectOverview: () => void;
   onToggleTheme: () => void;
   onRunSelection: () => void;
   onRunAll: () => void;
@@ -23,6 +44,12 @@ export const Header: React.FC<HeaderProps> = ({
   currentFile,
   isModified,
   theme,
+  projectName,
+  projectPath,
+  recentProjects,
+  onOpenProjectModal,
+  onOpenRecentProject,
+  onShowProjectOverview,
   onToggleTheme,
   onRunSelection,
   onRunAll,
@@ -32,10 +59,26 @@ export const Header: React.FC<HeaderProps> = ({
   isEvaluating = false
 }) => {
   const fileName = currentFile ? currentFile.split(/[/\\]/).pop() : 'untitled.R';
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [dropdownOpen]);
 
   return (
     <header className="h-12 bg-rt-mantle border-b border-rt-surface-0 flex items-center justify-between px-3 select-none flex-shrink-0">
-      {/* Brand Monogram & Title */}
+      {/* Brand Monogram & Title & Project Selector */}
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-2">
           <img src="/brand/favicon.svg" alt="Asterov" className="w-6 h-6" />
@@ -45,6 +88,77 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="text-xs px-1.5 py-0.5 rounded bg-rt-surface-0 text-rt-mauve font-mono font-medium">
             STUDIO
           </span>
+        </div>
+
+        {/* Project Selector Dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen(prev => !prev)}
+            className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-rt-surface-0/60 hover:bg-rt-surface-1 border border-rt-surface-1 text-xs text-rt-text transition group"
+            title={`Active Project: ${projectPath}`}
+          >
+            <FolderGit2 className="w-3.5 h-3.5 text-rt-blue group-hover:text-rt-mauve transition" />
+            <span className="font-semibold max-w-[140px] truncate">{projectName || 'Project'}</span>
+            <ChevronDown className={`w-3 h-3 text-rt-text-faint transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {dropdownOpen && (
+            <div className="absolute left-0 top-full mt-1.5 w-64 bg-rt-mantle border border-rt-surface-1 rounded-xl shadow-xl z-50 p-1.5 text-xs animate-in fade-in duration-100">
+              <div className="px-2 py-1 font-mono text-[10px] text-rt-text-faint truncate border-b border-rt-surface-0 mb-1">
+                {projectPath}
+              </div>
+
+              <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  onOpenProjectModal();
+                }}
+                className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-rt-surface-0 text-rt-text font-medium text-left transition"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-rt-blue" />
+                <span>Open Project Folder...</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  onShowProjectOverview();
+                }}
+                className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-rt-surface-0 text-rt-text font-medium text-left transition"
+              >
+                <Info className="w-3.5 h-3.5 text-rt-mauve" />
+                <span>Project Overview & Health</span>
+              </button>
+
+              {recentProjects.length > 0 && (
+                <>
+                  <div className="px-2 pt-2 pb-1 text-[10px] uppercase font-semibold tracking-wider text-rt-text-faint border-t border-rt-surface-0 mt-1 flex items-center space-x-1">
+                    <History className="w-3 h-3" />
+                    <span>Recent Projects</span>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto space-y-0.5">
+                    {recentProjects.slice(0, 5).map((rec) => (
+                      <button
+                        key={rec.path}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onOpenRecentProject(rec.path);
+                        }}
+                        className={`w-full flex flex-col items-start px-2.5 py-1 rounded text-left transition ${
+                          rec.path === projectPath
+                            ? 'bg-rt-surface-0 text-rt-blue font-semibold'
+                            : 'hover:bg-rt-surface-0/60 text-rt-text-soft hover:text-rt-text'
+                        }`}
+                      >
+                        <span className="truncate w-full font-medium">{rec.name}</span>
+                        <span className="truncate w-full font-mono text-[9px] text-rt-text-faint">{rec.path}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Current Document Chip */}

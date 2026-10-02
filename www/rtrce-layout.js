@@ -86,20 +86,27 @@
   }
 
   // --- Theme ----------------------------------------------------------------
-  // Dark (Mocha, matching the "A" icon) is the default; the choice is remembered
-  // so a Studio left open all day never flashes the wrong background.
+  // Themes: "cassie" (Dark coat, white ruff & socks, orange blaze), "mocha" (Catppuccin Mocha), "latte" (Light)
   function applyTheme(theme) {
     root().setAttribute("data-rtrce-theme", theme);
     var label = document.getElementById("rtrce-theme-label");
-    if (label) label.textContent = theme === "latte" ? "Light" : "Dark";
+    if (label) {
+      if (theme === "cassie") label.textContent = "Cassie 🐾";
+      else if (theme === "latte") label.textContent = "Light";
+      else label.textContent = "Dark";
+    }
   }
 
   function initTheme() {
-    applyTheme(recall(STORE_THEME) || "mocha");
+    applyTheme(recall(STORE_THEME) || "cassie");
     var button = document.getElementById("rtrce-theme-toggle");
     if (!button) return;
     button.addEventListener("click", function () {
-      var next = root().getAttribute("data-rtrce-theme") === "latte" ? "mocha" : "latte";
+      var current = root().getAttribute("data-rtrce-theme") || "cassie";
+      var next = "mocha";
+      if (current === "mocha") next = "cassie";
+      else if (current === "cassie") next = "latte";
+      else next = "mocha";
       applyTheme(next);
       store(STORE_THEME, next);
       refreshEditors();

@@ -5,6 +5,7 @@
 import React from 'react';
 import { ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, ChevronDown, ChevronRight } from 'lucide-react';
 import { CheckResult, TrceFields } from '../../types';
+import { ensureArray } from '../../utils/array';
 
 interface TrceInspectorProps {
   checkResult: CheckResult | null;
@@ -38,8 +39,11 @@ export const TrceInspector: React.FC<TrceInspectorProps> = ({
     );
   }
 
-  const coverage = Math.round(checkResult.coverage_pct || 0);
+  const coverage = Math.round(checkResult.coverage_pct ?? 0);
   const isComplete = coverage === 100;
+  const annotatedCount = checkResult.annotated_components ?? (checkResult as any).annotated_targets ?? 0;
+  const totalCount = checkResult.total_components ?? (checkResult as any).total_targets ?? 0;
+  const traces = ensureArray(checkResult.traces);
 
   return (
     <div className="h-full flex flex-col bg-rt-mantle text-xs select-none">
@@ -57,7 +61,7 @@ export const TrceInspector: React.FC<TrceInspectorProps> = ({
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold text-rt-text">Repository Coverage</span>
             <span className="font-mono text-xs font-bold text-rt-text">
-              {checkResult.annotated_components} / {checkResult.total_components} blocks
+              {annotatedCount} / {totalCount} blocks
             </span>
           </div>
 
@@ -85,12 +89,23 @@ export const TrceInspector: React.FC<TrceInspectorProps> = ({
         <div>
           <div className="text-[11px] font-semibold text-rt-text-faint uppercase tracking-wider mb-2 flex items-center justify-between">
             <span>Directives & 6-Point Scaffolding</span>
-            <span className="font-mono">{checkResult.traces?.length || 0}</span>
+            <span className="font-mono">{traces.length}</span>
           </div>
 
-          <div className="space-y-2">
-            {checkResult.traces?.map((trace: TrceFields) => {
-              const isExpanded = expandedTrace === trace.id;
+          {traces.length === 0 ? (
+            <div className="p-4 rounded border border-dashed border-rt-surface-1 text-center text-rt-text-faint">
+              <p className="text-[11px]">No TRCE doc-blocks detected in this file.</p>
+              <button
+                onClick={onAnnotate}
+                className="mt-2 text-[10px] text-rt-mauve hover:underline font-medium"
+              >
+                + Inject 6-point telemetry
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {traces.map((trace: TrceFields) => {
+                const isExpanded = expandedTrace === trace.id;
               const points = [
                 { label: 'WHO', val: trace.who },
                 { label: 'WHAT', val: trace.what },
@@ -170,7 +185,8 @@ export const TrceInspector: React.FC<TrceInspectorProps> = ({
               );
             })}
           </div>
-        </div>
+        )}
+      </div>
       </div>
     </div>
   );

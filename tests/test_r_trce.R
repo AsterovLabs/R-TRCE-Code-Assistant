@@ -628,6 +628,44 @@ assert("format_console_entry() orders output, messages, warnings and the error",
                                            warnings = "warn", error = "err")),
                  c("out", "msg", "Warning: warn", "Error: err")))
 
+# Test autocomplete tokens
+rt_comp <- new_r_session()
+session_evaluate(rt_comp, "df_test <- data.frame(score = c(10, 20), student = c('A', 'B'))")
+comp_df <- session_complete_tokens(rt_comp, "df_test$")
+assert("session_complete_tokens() discovers data frame column names",
+       all(c("df_test$score", "df_test$student") %in% comp_df))
+comp_fn <- session_complete_tokens(rt_comp, "df_")
+assert("session_complete_tokens() discovers workspace variables",
+       "df_test" %in% comp_fn)
+
+# Test object inspection
+insp_df <- session_inspect_object(rt_comp, "df_test")
+assert("session_inspect_object() identifies data frame class and tabular flag",
+       insp_df$found && insp_df$is_tabular && grepl("data.frame", insp_df$class))
+assert("session_inspect_object() includes str output and dimensions",
+       grepl("score", insp_df$str) && !is.null(insp_df$dim))
+insp_missing <- session_inspect_object(rt_comp, "no_such_var")
+assert("session_inspect_object() reports non-existent object cleanly",
+       !insp_missing$found && nzchar(insp_missing$error))
+
+# Test reproducible report rendering
+rep_res <- session_render_report(rt_comp, paste0(
+  "---\ntitle: Sample Report\nauthor: Student\n---\n\n",
+  "# Introduction\n\nThis is an automated analysis test.\n\n",
+  "```{r}\nsummary(df_test$score)\n```\n"
+))
+assert("session_render_report() returns ok status and generated HTML",
+       rep_res$ok && nzchar(rep_res$html) && file.exists(rep_res$file_path))
+assert("session_render_report() renders headings, code blocks and summary output",
+       grepl("<h1>Sample Report</h1>", rep_res$html) &&
+       grepl("summary\\(df_test\\$score\\)", rep_res$html))
+
+# Test integrated terminal runner
+term_res <- session_run_terminal_cmd(tempdir(), "echo rtrce_term_ok")
+assert("session_run_terminal_cmd() captures command output and exit status",
+       term_res$exit_code == 0L && any(grepl("rtrce_term_ok", term_res$output)))
+
+
 # ------------------------------------------------------------------------------
 # Test 10b: Testing Teaching Subsystem (R/teach.R)
 # ------------------------------------------------------------------------------
@@ -691,6 +729,101 @@ res_recycle <- session_evaluate(rt_teach_session, "1:5 * 2")
 desc_recycle <- describe_run(res_recycle)
 assert("describe_run() describes vectorisation and recycling for multi-element values",
        any(grepl("recycling", desc_recycle)) && any(grepl("element by element", desc_recycle)))
+
+# ------------------------------------------------------------------------------
+# Test 10c: Project Workspace Operations
+# ------------------------------------------------------------------------------
+cat("\n--- 10c. Testing Project Workspace Operations ---\n")
+
+samples_dir <- file.path(root_dir, "samples")
+proj_files <- find_project_r_files(samples_dir)
+assert("find_project_r_files() finds all .R files in a directory",
+       length(proj_files) >= 5 && all(grepl("\\.[rR]$", proj_files)))
+
+proj_meta <- detect_project_metadata(samples_dir)
+assert("detect_project_metadata() detects script workspace",
+       proj_meta$valid && proj_meta$file_count >= 5)
+
+proj_val <- validate_project_annotations(samples_dir)
+assert("validate_project_annotations() aggregates multi-file coverage",
+       is.list(proj_val) && proj_val$file_count >= 5 && proj_val$total_components > 0)
+
+# Test cross-file duplicate detection
+tmp_proj_dir <- tempfile("trce_proj_test_")
+dir.create(tmp_proj_dir, recursive = TRUE)
+file1_content <- paste(
+  "# /**",
+  paste0("#  * ", "@trce-id trce-shared-001"),
+  "#  * @trce-who Actor",
+  "#  * @trce-what Action 1",
+  "#  * @trce-where file1",
+  "#  * @trce-when init",
+  "#  * @trce-why testing",
+  "#  * @trce-how code",
+  "#  */",
+  "fn1 <- function() 1",
+  "", sep = "\n"
+)
+file2_content <- paste(
+  "# /**",
+  paste0("#  * ", "@trce-id trce-shared-001"),
+  "#  * @trce-who Actor",
+  "#  * @trce-what Action 2",
+  "#  * @trce-where file2",
+  "#  * @trce-when init",
+  "#  * @trce-why testing",
+  "#  * @trce-how code",
+  "#  */",
+  "fn2 <- function() 2",
+  "", sep = "\n"
+)
+writeLines(file1_content, file.path(tmp_proj_dir, "file1.R"))
+writeLines(file2_content, file.path(tmp_proj_dir, "file2.R"))
+
+dup_val <- validate_project_annotations(tmp_proj_dir)
+assert("validate_project_annotations() detects cross-file duplicate @trce-id",
+       !dup_val$ok && length(dup_val$global_issues) > 0 &&
+       any(grepl("Cross-file duplicate", vapply(dup_val$global_issues, function(x) x$message, character(1)))))
+
+# Test explain_project
+proj_exp <- explain_project(samples_dir)
+assert("explain_project() produces multi-file architectural summary",
+       nzchar(proj_exp$text) && length(proj_exp$components) > 0 && "shiny" %in% proj_exp$imports)
+
+# Test annotate_project
+ann_tmp_dir <- tempfile("trce_ann_test_")
+dir.create(ann_tmp_dir, recursive = TRUE)
+writeLines("calc_sum <- function(a, b) a + b", file.path(ann_tmp_dir, "math.R"))
+writeLines("get_data <- function() c(1, 2, 3)", file.path(ann_tmp_dir, "data.R"))
+
+ann_proj_res <- annotate_project(ann_tmp_dir, inplace = TRUE)
+assert("annotate_project() batch-annotates project files",
+       ann_proj_res$ok && ann_proj_res$total_blocks_added >= 2)
+
+ann_proj_val <- validate_project_annotations(ann_tmp_dir)
+assert("batch-annotated project passes validation with 100% coverage and no collisions",
+       ann_proj_val$ok && ann_proj_val$coverage_pct == 100 && length(ann_proj_val$global_issues) == 0)
+
+unlink(tmp_proj_dir, recursive = TRUE)
+unlink(ann_tmp_dir, recursive = TRUE)
+
+# Test session_open_project with .Rprofile
+orig_wd <- getwd()
+proj_sess_dir <- tempfile("trce_sess_test_")
+dir.create(proj_sess_dir, recursive = TRUE)
+writeLines("PROJECT_FLAG <- 'ACTIVE'", file.path(proj_sess_dir, ".Rprofile"))
+writeLines("data_worker <- function() 100", file.path(proj_sess_dir, "worker.R"))
+
+test_sess <- new_r_session()
+sess_open_res <- session_open_project(test_sess, proj_sess_dir)
+assert("session_open_project() switches wd and sources .Rprofile into session environment",
+       sess_open_res$ok && sess_open_res$rprofile_loaded &&
+       identical(normalizePath(test_sess$wd), normalizePath(proj_sess_dir)) &&
+       exists("PROJECT_FLAG", envir = test_sess$env) &&
+       identical(get("PROJECT_FLAG", envir = test_sess$env), "ACTIVE"))
+
+setwd(orig_wd)
+unlink(proj_sess_dir, recursive = TRUE)
 
 # ------------------------------------------------------------------------------
 # Test 11: Repository self-coverage, trace index and dependency-manifest integrity

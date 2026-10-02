@@ -124,6 +124,12 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-common-010` | `required_packages()` | utility_function | `R/common.R` (L288-L290) |
 | `trce-common-011` | `optional_packages()` | utility_function | `R/common.R` (L303-L305) |
 | `trce-common-012` | `missing_packages()` | utility_function | `R/common.R` (L318-L322) |
+| `trce-common-013` | `find_project_r_files()` | utility_function | `R/common.R` (L335-L349) |
+| `trce-common-014` | `detect_project_metadata()` | utility_function | `R/common.R` (L360-L419) |
+| `trce-common-015` | `load_registry()` | utility_function | `R/common.R` |
+| `trce-common-016` | `.load_concepts()` | utility_function | `R/common.R` |
+| `trce-common-017` | `.load_errors()` | utility_function | `R/common.R` |
+| `trce-common-018` | `.load_packages()` | utility_function | `R/common.R` |
 | `trce-analyzer-001` | `classify_expression()` | utility_function | `R/analyzer.R` (L81-L206) |
 | `trce-analyzer-002` | `analyze_function_node()` | statistical_model | `R/analyzer.R` (L218-L275) |
 | `trce-analyzer-003` | `extract_function_calls()` | utility_function | `R/analyzer.R` (L287-L303) |
@@ -139,11 +145,14 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-annotator-007` | `determine_how()` | utility_function | `R/annotator.R` (L260-L300) |
 | `trce-annotator-008` | `format_trce_block()` | utility_function | `R/annotator.R` (L312-L337) |
 | `trce-annotator-009` | `inject_single_block()` | utility_function | `R/annotator.R` (L451-L460) |
+| `trce-annotator-010` | `annotate_project()` | utility_function | `R/annotator.R` (L471-L553) |
 | `trce-validator-001` | `validate_r_annotations()` | data_pipeline | `R/validator.R` (L30-L122) |
 | `trce-validator-002` | `extract_all_trce_blocks()` | utility_function | `R/validator.R` (L134-L204) |
+| `trce-validator-003` | `validate_project_annotations()` | data_pipeline | `R/validator.R` (L215-L305) |
 | `trce-explain-001` | `format_text_explanation()` | utility_function | `R/explain.R` (L49-L106) |
 | `trce-explain-002` | `format_markdown_explanation()` | utility_function | `R/explain.R` (L117-L194) |
 | `trce-explain-003` | `export_trace_json()` | utility_function | `R/explain.R` (L206-L235) |
+| `trce-explain-004` | `explain_project()` | utility_function | `R/explain.R` (L246-L352) |
 | `trce-pedagogy-001` | `deconstruct_pipes()` | utility_function | `R/pedagogy.R` (L206-L315) |
 | `trce-pedagogy-002` | `describe_pipe_verb()` | utility_function | `R/pedagogy.R` (L326-L344) |
 | `trce-pedagogy-003` | `deconstruct_formulas()` | statistical_model | `R/pedagogy.R` (L359-L396) |
@@ -160,7 +169,14 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-runtime-007` | `session_set_wd()` | utility_function | `R/runtime.R` (L161-L174) |
 | `trce-runtime-008` | `session_reset()` | utility_function | `R/runtime.R` (L132-L144) |
 | `trce-runtime-009` | `format_console_entry()` | utility_function | `R/runtime.R` (L501-L512) |
-| `trce-runtime-010` | `install_quit_guard()` | utility_function | `R/runtime.R` (L64-L80) | 
+| `trce-runtime-010` | `install_quit_guard()` | utility_function | `R/runtime.R` (L64-L80) |
+| `trce-runtime-011` | `resolve_r_help()` | utility_function | `R/runtime.R` (L515-L585) |
+| `trce-runtime-012` | `session_get_data_preview()` | utility_function | `R/runtime.R` (L590-L650) |
+| `trce-runtime-013` | `session_complete_tokens()` | utility_function | `R/runtime.R` (L655-L695) |
+| `trce-runtime-014` | `session_inspect_object()` | utility_function | `R/runtime.R` (L706-L743) |
+| `trce-runtime-015` | `session_render_report()` | utility_function | `R/runtime.R` (L755-L945) |
+| `trce-runtime-016` | `session_run_terminal_cmd()` | utility_function | `R/runtime.R` (L957-L986) |
+| `trce-runtime-017` | `session_open_project()` | utility_function | `R/runtime.R` (L998-L1042) |
 
 Coverage is 100% of annotatable components in every source file, verified by
 `rtrce check <file>` and asserted by `tests/test_r_trce.R`.
@@ -277,6 +293,7 @@ before it looks like anything else. The tokens live in `www/rtrce-theme.css` and
 | Token group | Values |
 |-------------|--------|
 | Surfaces (dark = Mocha) | `--rt-crust #11111b`, `--rt-mantle #181825`, `--rt-base #1e1e2e`, `--rt-surface-0/1/2` |
+| Surfaces (Cassie = Dark/Orange) | `--rt-crust #0e0d13`, `--rt-base #1b1a24`, white text/mane, orange blaze (`--rt-mauve #ff7828`), switched by `[data-rtrce-theme="cassie"]` |
 | Surfaces (light = Latte) | `--rt-base #eff1f5` and friends, switched by `[data-rtrce-theme="latte"]` on `<html>` |
 | Accents | mauve `#cba6f7`, blue `#89b4fa`, teal `#94e2d5`, green `#a6e3a1`, yellow `#f9e2af`, peach `#fab387`, red `#f38ba8` |
 | Signature | `--rt-grad: linear-gradient(135deg, #cba6f7, #89b4fa, #94e2d5)` -- the icon's own stroke |
@@ -286,7 +303,7 @@ before it looks like anything else. The tokens live in `www/rtrce-theme.css` and
 Rules that follow from it:
 
 1. **Every colour comes from a token.** No literal hex in R or in component CSS; the theme is the
-   only place a colour is named. Both themes are checked for WCAG contrast (body 11.3:1,
+   only place a colour is named. All themes are checked for WCAG contrast (body 11.3:1,
    secondary 7.4:1, accents 7-13:1 on dark).
 2. **The gradient is an accent, never a surface.** It appears on the wordmark, the primary action,
    a 1px hairline under the title bar, and as a soft wash behind the empty states.
@@ -318,7 +335,8 @@ explanation, AST, student studio) as tabs of the bottom panel rather than replac
 | `trce-rparse-020` | `teach.R` module | teaching_subsystem | `R/teach.R` |
 | `trce-teach-001` | `concept_tags_for_lines()` | utility_function | `R/teach.R` |
 | `trce-teach-002` | `explain_code_line()` | utility_function | `R/teach.R` |
-| `trce-teach-005` | `TEACH_ERRORS` | data_schema | `R/teach.R` |
 | `trce-teach-003` | `explain_r_error()` | utility_function | `R/teach.R` |
 | `trce-teach-004` | `describe_run()` | utility_function | `R/teach.R` |
+| `trce-teach-005` | `get_teach_errors()` | utility_function | `R/teach.R` |
+| `trce-teach-006` | `get_teach_concepts()` | utility_function | `R/teach.R` |
 | `trce-rparse-021` | `studio_learn_pane_server()` | shiny_server | `R/studio_learn.R` |

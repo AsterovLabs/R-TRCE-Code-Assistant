@@ -459,3 +459,95 @@ inject_single_block <- function(raw_lines, target_line, annotation_text) {
   }
 }
 
+# /**
+#  * @trce-id trce-annotator-010
+#  * @trce-who Trace Annotator Subsystem / Project Injector
+#  * @trce-what Batch synthesizes and injects TRCE annotations across all R files in a project
+#  * @trce-where annotator.R -> annotate_project | Upstream: CLI annotate router, Studio batch tools | Downstream: inject_annotations, find_project_r_files
+#  * @trce-when When annotating an entire project directory via CLI or Studio
+#  * @trce-why Enables non-destructive batch documentation of an entire R project with per-module trace namespaces
+#  * @trce-how Scans project files, derives modular prefixes, parses ASTs, applies inject_annotations, and outputs modified files
+#  */
+annotate_project <- function(project_dir, inplace = FALSE, out_dir = NULL,
+                             style = c("jsdoc", "roxygen"),
+                             add_file_header = TRUE,
+                             prefix_override = NULL) {
+  style <- match.arg(style)
+  files <- find_project_r_files(project_dir)
+
+  if (length(files) == 0) {
+    return(list(
+      ok = TRUE,
+      project_dir = project_dir,
+      file_count = 0L,
+      total_blocks_added = 0L,
+      file_results = list()
+    ))
+  }
+
+  file_results <- list()
+  total_blocks <- 0L
+
+  for (f in files) {
+    base_name <- tools::file_path_sans_ext(basename(f))
+    clean_base <- tolower(gsub("[^a-zA-Z0-9]+", "-", base_name))
+    clean_base <- gsub("^-+|-+$", "", clean_base)
+    if (!nzchar(clean_base)) clean_base <- "mod"
+
+    prefix <- if (!is.null(prefix_override) && nzchar(prefix_override)) {
+      prefix_override
+    } else {
+      sprintf("trce-%s", clean_base)
+    }
+
+    res <- tryCatch({
+      p <- parse_r_file(f)
+      a <- analyze_r_file(p)
+      inj <- inject_annotations(p, a, prefix = prefix, style = style, add_file_header = add_file_header)
+
+      target_path <- f
+      if (!is.null(out_dir) && nzchar(out_dir)) {
+        rel <- if (nzchar(project_dir)) {
+          sub(sprintf("^%s/?", normalizePath(project_dir, winslash = "/", mustWork = FALSE)), "", normalizePath(f, winslash = "/", mustWork = FALSE))
+        } else basename(f)
+        target_path <- file.path(out_dir, rel)
+        dir.create(dirname(target_path), recursive = TRUE, showWarnings = FALSE)
+      }
+
+      if (inplace || (!is.null(out_dir) && nzchar(out_dir))) {
+        if (inj$blocks_added > 0) {
+          writeLines(inj$annotated_code, target_path, useBytes = TRUE)
+        }
+      }
+
+      list(
+        file = f,
+        target_path = target_path,
+        blocks_added = inj$blocks_added,
+        annotated_code = inj$annotated_code,
+        error = NULL
+      )
+    }, error = function(e) {
+      list(
+        file = f,
+        target_path = f,
+        blocks_added = 0L,
+        annotated_code = NULL,
+        error = conditionMessage(e)
+      )
+    })
+
+    total_blocks <- total_blocks + res$blocks_added
+    file_results[[f]] <- res
+  }
+
+  list(
+    ok = all(vapply(file_results, function(r) is.null(r$error), logical(1))),
+    project_dir = project_dir,
+    file_count = length(files),
+    total_blocks_added = total_blocks,
+    file_results = file_results
+  )
+}
+
+

@@ -10,6 +10,7 @@ interface MonacoEditorProps {
   value: string;
   onChange: (value: string) => void;
   theme: ThemeMode;
+  language?: string;
   onRunSelection: () => void;
   onSave: () => void;
   onCursorChange?: (line: number, col: number) => void;
@@ -20,6 +21,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   value,
   onChange,
   theme,
+  language = 'r',
   onRunSelection,
   onSave,
   onCursorChange,
@@ -165,6 +167,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       <Editor
         height="100%"
         defaultLanguage="r"
+        language={language}
         value={value}
         onChange={(val) => onChange(val || '')}
         theme={theme === 'mocha' ? 'asterov-mocha' : 'asterov-latte'}

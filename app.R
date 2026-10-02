@@ -324,7 +324,7 @@ ui <- fluidPage(
       div(class = "rtrce-titlebar-actions",
         span(class = "rtrce-session-pill", span(class = "rtrce-dot"), "session ready"),
         tags$button(id = "rtrce-theme-toggle", class = "rtrce-icon-btn",
-                    title = "Switch between the dark and light theme",
+                    title = "Switch theme (Cassie 🐾 / Light / Dark)",
                     "◐"),
         tags$button(id = "rtrce-help-toggle", class = "rtrce-icon-btn",
                     title = "Keyboard shortcuts (press ?)", "?")
@@ -455,12 +455,18 @@ ui <- fluidPage(
           )
         ),
 
-        # --- TAB 5: STUDENT STUDIO & LEARNING SUITE ---
+        # --- TAB 5: DATA VIEWER (View(df)) ---
+        tabPanel("Data Viewer",
+          br(),
+          uiOutput("data_viewer_container")
+        ),
+
+        # --- TAB 6: STUDENT STUDIO & LEARNING SUITE ---
         tabPanel("🎓 Student Studio",
           br(),
           tabsetPanel(
             id = "student_subtabs",
-            tabPanel("Pitfall Sentinel",
+            tabPanel("🐾 Cassie's Watch (Pitfall Sentinel)",
               br(),
               uiOutput("student_pitfalls_ui")
             ),
@@ -498,9 +504,7 @@ ui <- fluidPage(
             ),
 
             tabPanel("Environment",
-              p(class = "rt-xs", style = "color: var(--rt-text-faint); margin-bottom: 8px;",
-                "Every object your code has created, refreshed after each run."),
-              tableOutput("session_workspace_table")
+              uiOutput("session_workspace_ui")
             ),
 
             tabPanel("Files",
@@ -555,15 +559,32 @@ server <- function(input, output, session) {
   load_error       <- reactiveVal(NULL)
   encoding_note    <- reactiveVal(NULL)
 
+  # Multi-document state: list of list(id, name, path, code, converted)
+  open_docs        <- reactiveVal(list(list(
+    id = "doc-1",
+    name = "sample_pipeline.R",
+    path = "",
+    code = DEFAULT_CODE,
+    converted = FALSE
+  )))
+  active_doc_id    <- reactiveVal("doc-1")
+
   # Walkthrough navigation state
   step_index <- reactiveVal(1L)
   completed_walkthrough <- reactiveVal(FALSE)
+  active_help_topic <- reactiveVal(NULL)
+  active_view_dataset <- reactiveVal(NULL)
 
   # --- LIVE SESSION SHARED BY THE EDITOR AND THE CONSOLE ----------------------
   # One session, one document. Ctrl+Enter in the editor and a command typed at
   # the console therefore behave identically, and objects created in either are
   # immediately visible to the other -- which is how a real R session works.
-  live_session <- reactiveVal(new_r_session())
+  initial_proj <- Sys.getenv("PROJECT_DIR", unset = "")
+  sess_init <- new_r_session()
+  if (nzchar(initial_proj) && dir.exists(initial_proj)) {
+    tryCatch(session_open_project(sess_init, initial_proj), error = function(e) NULL)
+  }
+  live_session <- reactiveVal(sess_init)
   console_log  <- reactiveVal(list())
   # Bumped after every evaluation and restart. The session object is mutated in
   # place, so re-setting live_session() to the same object does NOT invalidate its
@@ -588,6 +609,42 @@ server <- function(input, output, session) {
   }
 
   run_code <- function(code, label = "console", from = NULL, to = NULL) {
+    trimmed_code <- trimws(paste(code, collapse = "\n"))
+
+    # Intercept View(df)
+    if (grepl("^(?:utils::)?View\\s*\\(\\s*([A-Za-z0-9_.]+)\\s*\\)$", trimmed_code)) {
+      match_res <- regmatches(trimmed_code, regexec("^(?:utils::)?View\\s*\\(\\s*([A-Za-z0-9_.]+)\\s*\\)$", trimmed_code))[[1]]
+      var_name <- match_res[2]
+      active_view_dataset(var_name)
+      updateTabsetPanel(session, "main_tabs", selected = "Data Viewer")
+      new_entry <- list(
+        code = trimmed_code,
+        lines = sprintf("Opened '%s' in the Data Viewer tab.", var_name),
+        kinds = "msg",
+        incomplete = FALSE
+      )
+      console_log(c(console_log(), list(new_entry)))
+      return(list(ok = TRUE, incomplete = FALSE, entries = list(), plots = list(),
+                  workspace = session_workspace(live_session()), wd = getwd()))
+    }
+
+    # Intercept ?topic or help("topic") queries
+    if (grepl("^\\?[A-Za-z0-9_.]+$", trimmed_code)) {
+      topic_str <- sub("^\\?", "", trimmed_code)
+      active_help_topic(topic_str)
+      # Switch rail tabs to Help if available
+      updateTabsetPanel(session, "rail_tabs", selected = "Help")
+      new_entry <- list(
+        code = trimmed_code,
+        lines = sprintf("Showing documentation for '%s' in the Help pane.", topic_str),
+        kinds = "msg",
+        incomplete = FALSE
+      )
+      console_log(c(console_log(), list(new_entry)))
+      return(list(ok = TRUE, incomplete = FALSE, entries = list(), plots = list(),
+                  workspace = session_workspace(live_session()), wd = getwd()))
+    }
+
     live <- live_session()
 
     # Snapshot the workspace BEFORE evaluation so describe_run() can diff.
@@ -681,6 +738,220 @@ server <- function(input, output, session) {
     ws
   })
 
+  output$session_workspace_ui <- renderUI({
+    session_revision()
+    ws <- session_workspace(live_session())
+    tagList(
+      div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
+        p(class = "rt-xs", style = "color: var(--rt-text-faint); margin: 0;",
+          if (nrow(ws) > 0) sprintf("%d object(s) in active session", nrow(ws)) else "No objects yet"),
+        if (nrow(ws) > 0) {
+          actionButton("workspace_clear_btn", "🧹 Clear", class = "btn-default btn-xs",
+                       title = "Clear all objects from the workspace")
+        }
+      ),
+      if (nrow(ws) == 0) {
+        div(class = "rtrce-note", style = "margin-top: 12px;",
+            "Run code in the editor or console to create variables and data frames.")
+      } else {
+        div(style = "overflow-x: auto; max-height: calc(100vh - 280px);",
+          tags$table(class = "table table-condensed table-hover", style = "font-size: 12px; margin-bottom: 0;",
+            tags$thead(
+              tags$tr(
+                tags$th("Name"),
+                tags$th("Class"),
+                tags$th("Size"),
+                tags$th("Preview"),
+                tags$th(style = "text-align: right;", "Actions")
+              )
+            ),
+            tags$tbody(
+              lapply(seq_len(nrow(ws)), function(i) {
+                nm <- ws$name[i]
+                cls <- ws$class[i]
+                sz <- ws$size[i]
+                prev <- ws$preview[i]
+                is_tab <- grepl("data.frame|matrix|table", cls)
+
+                tags$tr(
+                  tags$td(
+                    tags$a(
+                      href = "#",
+                      onclick = sprintf("Shiny.setInputValue('workspace_inspect_item', '%s', {priority: 'event'}); return false;", nm),
+                      style = "font-weight: 600; font-family: monospace; color: var(--rt-blue, #89b4fa); cursor: pointer;",
+                      nm
+                    )
+                  ),
+                  tags$td(span(class = "badge-secondary", style = "font-size: 10px;", cls)),
+                  tags$td(style = "font-family: monospace; color: var(--rt-text-muted); font-size: 11px;", sz),
+                  tags$td(style = "font-family: monospace; font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", prev),
+                  tags$td(style = "text-align: right; white-space: nowrap;",
+                    actionButton(
+                      paste0("btn_inspect_", nm),
+                      "ℹ️",
+                      class = "btn-default btn-xs",
+                      title = "Inspect object structure",
+                      onclick = sprintf("Shiny.setInputValue('workspace_inspect_item', '%s', {priority: 'event'}); return false;", nm)
+                    ),
+                    if (is_tab) {
+                      actionButton(
+                        paste0("btn_view_", nm),
+                        "👁️ View",
+                        class = "btn-default btn-xs",
+                        style = "margin-left: 4px;",
+                        title = "Open in Data Viewer",
+                        onclick = sprintf("Shiny.setInputValue('workspace_view_item', '%s', {priority: 'event'}); return false;", nm)
+                      )
+                    }
+                  )
+                )
+              })
+            )
+          )
+        )
+      }
+    )
+  })
+
+  # Handle Inspect object
+  observeEvent(input$workspace_inspect_item, {
+    nm <- input$workspace_inspect_item
+    if (is.null(nm) || !nzchar(nm)) return()
+    info <- session_inspect_object(live_session(), nm)
+    if (!info$found) {
+      showNotification(info$error, type = "error")
+      return()
+    }
+
+    showModal(modalDialog(
+      title = tagList(
+        span(style = "font-family: monospace; font-weight: bold; color: var(--rt-blue, #89b4fa);", info$name),
+        span(class = "badge-secondary", style = "margin-left: 8px; font-size: 11px;", info$class)
+      ),
+      div(style = "margin-bottom: 12px; font-size: 13px; color: var(--rt-text-muted);",
+        sprintf("Type: %s · Length: %d · Size: %s%s",
+                info$type, info$length, info$size,
+                if (!is.null(info$dim)) sprintf(" · Dim: %s", info$dim) else "")
+      ),
+      tabsetPanel(
+        tabPanel("Structure (str)",
+          tags$pre(style = "max-height: 300px; overflow-y: auto; font-size: 12px; background: var(--rt-mantle, #181825); color: var(--rt-text, #cdd6f4); border: 1px solid var(--rt-border-plain, #313244); padding: 10px; border-radius: 6px;",
+            info$str)
+        ),
+        tabPanel("Summary",
+          tags$pre(style = "max-height: 300px; overflow-y: auto; font-size: 12px; background: var(--rt-mantle, #181825); color: var(--rt-text, #cdd6f4); border: 1px solid var(--rt-border-plain, #313244); padding: 10px; border-radius: 6px;",
+            info$summary)
+        )
+      ),
+      footer = tagList(
+        if (info$is_tabular) {
+          actionButton("modal_open_data_viewer", "👁️ Open in Data Viewer", class = "btn-primary btn-sm")
+        },
+        modalButton("Close")
+      ),
+      size = "l",
+      easyClose = TRUE
+    ))
+  })
+
+  observeEvent(input$modal_open_data_viewer, {
+    removeModal()
+    nm <- input$workspace_inspect_item
+    if (!is.null(nm) && nzchar(nm)) {
+      updateSelectInput(session, "data_viewer_obj", selected = nm)
+      updateTabsetPanel(session, "main_tabs", selected = "Data Viewer")
+    }
+  })
+
+  observeEvent(input$workspace_view_item, {
+    nm <- input$workspace_view_item
+    if (!is.null(nm) && nzchar(nm)) {
+      updateSelectInput(session, "data_viewer_obj", selected = nm)
+      updateTabsetPanel(session, "main_tabs", selected = "Data Viewer")
+    }
+  })
+
+  # Handle Clear Workspace
+  observeEvent(input$workspace_clear_btn, {
+    showModal(modalDialog(
+      title = "Clear Workspace",
+      "Are you sure you want to remove all objects from the R session workspace? This action cannot be undone.",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_clear_workspace", "Clear All Objects", class = "btn-danger")
+      ),
+      size = "s",
+      easyClose = TRUE
+    ))
+  })
+
+  observeEvent(input$confirm_clear_workspace, {
+    removeModal()
+    live <- live_session()
+    rm(list = ls(live$env, all.names = TRUE), envir = live$env)
+    install_quit_guard(live$env)
+    session_revision(session_revision() + 1L)
+    showNotification("Workspace cleared.", type = "message")
+  })
+
+  # Handle Autocomplete request
+  observeEvent(input$editor_complete_request, {
+    req <- input$editor_complete_request
+    if (is.null(req) || is.null(req$prefix)) return()
+    tokens <- session_complete_tokens(live_session(), req$prefix)
+    session$sendCustomMessage("rtrce:showCompletions", list(
+      tokens = tokens,
+      prefix = req$prefix,
+      line = req$line,
+      startCh = req$startCh,
+      endCh = req$endCh,
+      target = req$id
+    ))
+  })
+
+  # Handle Knit / Render Report
+  rendered_report_html <- reactiveVal("")
+
+  observeEvent(input$editor_knit_btn, {
+    showNotification("Rendering report...", type = "message", duration = 2)
+    doc_code <- working_code()
+    fname <- active_filename()
+    res <- session_render_report(live_session(), doc_code, fname, tempdir())
+
+    if (!res$ok) {
+      showNotification(sprintf("Render error: %s", res$error), type = "error", duration = 8)
+      return()
+    }
+
+    rendered_report_html(res$html)
+
+    showModal(modalDialog(
+      title = tagList(
+        span("Report Preview: "),
+        span(style = "font-family: monospace; font-weight: bold;", fname),
+        span(class = "badge-secondary", style = "margin-left: 8px;", sprintf("Engine: %s", res$engine))
+      ),
+      div(style = "max-height: 70vh; overflow-y: auto; border: 1px solid var(--rt-border-plain, #313244); border-radius: 6px; background: #ffffff; padding: 20px;",
+        HTML(res$html)
+      ),
+      footer = tagList(
+        downloadButton("download_rendered_html", "Download HTML", class = "btn-primary btn-sm"),
+        modalButton("Close")
+      ),
+      size = "l",
+      easyClose = TRUE
+    ))
+  })
+
+  output$download_rendered_html <- downloadHandler(
+    filename = function() {
+      sub("\\.[RrQq][Mm][Dd]$", ".html", active_filename())
+    },
+    content = function(file) {
+      writeLines(rendered_report_html(), file)
+    }
+  )
+
   # Load an R file into the editor. Read failures are recorded in load_error()
   # rather than swallowed, so the user is told what went wrong.
   load_source_file <- function(path, display_name) {
@@ -691,6 +962,28 @@ server <- function(input, output, session) {
     if (is.null(loaded)) return(invisible(FALSE))
 
     txt <- paste(loaded$lines, collapse = "\n")
+
+    # Check if document is already open in open_docs
+    docs <- open_docs()
+    match_idx <- which(vapply(docs, function(d) identical(d$path, path) && nzchar(path), logical(1)))
+    new_id <- if (length(match_idx) > 0) docs[[match_idx[1]]]$id else sprintf("doc-%d", length(docs) + 1L)
+
+    doc_obj <- list(
+      id = new_id,
+      name = display_name,
+      path = path,
+      code = txt,
+      converted = loaded$converted
+    )
+
+    if (length(match_idx) > 0) {
+      docs[[match_idx[1]]] <- doc_obj
+    } else {
+      docs[[length(docs) + 1L]] <- doc_obj
+    }
+    open_docs(docs)
+    active_doc_id(new_id)
+
     initial_code(txt)
     working_code(txt)
     active_filename(display_name)
@@ -703,6 +996,71 @@ server <- function(input, output, session) {
     } else {
       NULL
     })
+    invisible(TRUE)
+  }
+
+  switch_to_doc <- function(doc_id) {
+    docs <- open_docs()
+    idx <- which(vapply(docs, function(d) identical(d$id, doc_id), logical(1)))
+    if (length(idx) == 0) return(invisible(FALSE))
+    target <- docs[[idx[1]]]
+
+    # Save active doc content first
+    cur_id <- active_doc_id()
+    cur_code <- working_code()
+    for (i in seq_along(docs)) {
+      if (identical(docs[[i]]$id, cur_id)) {
+        docs[[i]]$code <- cur_code
+        break
+      }
+    }
+    open_docs(docs)
+
+    active_doc_id(target$id)
+    initial_code(target$code)
+    working_code(target$code)
+    active_filename(target$name)
+    active_file_path(target$path)
+    step_index(1L)
+    load_error(NULL)
+    encoding_note(if (isTRUE(target$converted)) "Re-encoded as Latin-1/cp1252" else NULL)
+    invisible(TRUE)
+  }
+
+  close_doc <- function(doc_id) {
+    docs <- open_docs()
+    if (length(docs) <= 1) {
+      showNotification("Cannot close the only open tab.", type = "warning", duration = 3)
+      return(invisible(FALSE))
+    }
+    rem_idx <- which(vapply(docs, function(d) identical(d$id, doc_id), logical(1)))
+    if (length(rem_idx) == 0) return(invisible(FALSE))
+
+    docs <- docs[-rem_idx[1]]
+    open_docs(docs)
+
+    if (identical(active_doc_id(), doc_id)) {
+      switch_to_doc(docs[[length(docs)]]$id)
+    }
+    invisible(TRUE)
+  }
+
+  new_doc <- function() {
+    docs <- open_docs()
+    new_num <- length(docs) + 1L
+    new_name <- sprintf("untitled_%d.R", new_num)
+    new_id <- sprintf("doc-%d", as.integer(Sys.time()))
+    new_content <- sprintf("# %s\n# Created %s\n\n", new_name, format(Sys.time(), "%Y-%m-%d %H:%M"))
+    doc_obj <- list(
+      id = new_id,
+      name = new_name,
+      path = "",
+      code = new_content,
+      converted = FALSE
+    )
+    docs[[length(docs) + 1L]] <- doc_obj
+    open_docs(docs)
+    switch_to_doc(new_id)
     invisible(TRUE)
   }
 
@@ -1182,7 +1540,7 @@ server <- function(input, output, session) {
       return(div(class = "card rt-card-ok",
         h3(style = "margin-top: 0;", "🎉 Clean Bill of Health!"),
         p(style = "font-size: 15px;",
-          sprintf("%s scanned this script and found zero common beginner traps, NA comparison errors, or quadratic copy-on-modify memory bottlenecks.", APP_NAME))
+          "Cassie watched over this script and found zero common beginner traps, NA comparison errors, or memory bottlenecks. Purrfect! ✨")
       ))
     }
 
@@ -1212,8 +1570,8 @@ server <- function(input, output, session) {
 
     tagList(
       div(style = "margin-bottom: 16px;",
-        h3(style = "margin: 0 0 6px;", "Student Pitfall & Safety Audit"),
-        p(class = "rt-muted", sprintf("Found %d potential conceptual or memory trap(s) to review.", length(pitfalls)))
+        h3(style = "margin: 0 0 6px;", "🐾 Cassie's Watch: Pitfall & Safety Audit"),
+        p(class = "rt-muted", sprintf("Cassie spotted %d potential conceptual or memory trap(s) to review.", length(pitfalls)))
       ),
       cards
     )
@@ -1368,6 +1726,84 @@ server <- function(input, output, session) {
     )
   })
 
+  # --- DATA VIEWER (View(df)) CONTAINER --------------------------------------
+  output$data_viewer_container <- renderUI({
+    session_revision()
+    live <- live_session()
+    current_name <- active_view_dataset()
+
+    ws <- session_workspace(live)
+    data_objects <- ws$name[ws$class %in% c("data.frame", "matrix", "table", "data.table", "tibble") | ws$type %in% c("list", "double", "integer", "character")]
+
+    selector_bar <- div(style = "display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;",
+      strong("Object:"),
+      div(style = "min-width: 180px;",
+        selectInput("data_viewer_select_obj", NULL,
+                    choices = if (length(data_objects) > 0) data_objects else c("(no workspace objects)" = ""),
+                    selected = if (!is.null(current_name) && current_name %in% data_objects) current_name else if (length(data_objects) > 0) data_objects[1] else "",
+                    width = "100%")
+      ),
+      actionButton("data_viewer_refresh_btn", "↻ Refresh", class = "rtrce-btn btn-sm"),
+      if (!is.null(current_name) && nzchar(current_name)) {
+        span(class = "rt-chip rt-chip-accent", current_name)
+      }
+    )
+
+    chosen <- input$data_viewer_select_obj %||% current_name
+    if (is.null(chosen) || !nzchar(chosen)) {
+      return(div(class = "card",
+        selector_bar,
+        div(class = "rtrce-empty",
+          div(class = "rtrce-empty-icon", "⊞"),
+          div(class = "rtrce-empty-title", "No dataset selected"),
+          p(class = "rt-xs", "Type View(my_df) in the console or assign a data frame (e.g. df <- data.frame(a=1:5, b=letters[1:5])).")
+        )
+      ))
+    }
+
+    preview <- tryCatch(session_get_data_preview(live, chosen), error = function(e) {
+      list(found = FALSE, error = conditionMessage(e))
+    })
+
+    if (!isTRUE(preview$found)) {
+      return(div(class = "card",
+        selector_bar,
+        div(class = "rtrce-banner rtrce-banner-warn",
+          preview$error %||% "Could not load dataset.")
+      ))
+    }
+
+    div(class = "card",
+      selector_bar,
+      div(style = "display:flex; gap:6px; align-items:center; margin-bottom:10px;",
+        span(class = "rt-chip rt-chip-ok", sprintf("%d rows x %d cols", preview$total_rows, preview$total_cols)),
+        if (preview$total_rows > preview$displayed_rows) {
+          span(class = "rt-chip rt-chip-warn", sprintf("Showing first %d rows", preview$displayed_rows))
+        }
+      ),
+      div(style = "max-height: 60vh; overflow: auto; border: 1px solid var(--rt-border-plain); border-radius: 8px;",
+        tableOutput("data_viewer_table")
+      )
+    )
+  })
+
+  output$data_viewer_table <- renderTable({
+    session_revision()
+    live <- live_session()
+    chosen <- input$data_viewer_select_obj %||% active_view_dataset()
+    req(chosen)
+    preview <- tryCatch(session_get_data_preview(live, chosen), error = function(e) NULL)
+    if (is.null(preview) || !isTRUE(preview$found)) return(NULL)
+    preview$data
+  }, rownames = TRUE, striped = TRUE, hover = TRUE, bordered = TRUE, spacing = "s")
+
+  observeEvent(input$data_viewer_select_obj, {
+    val <- input$data_viewer_select_obj
+    if (!is.null(val) && nzchar(val) && !identical(val, active_view_dataset())) {
+      active_view_dataset(val)
+    }
+  })
+
   # --- EDITOR, CONSOLE & RAIL PANES -------------------------------------------
   # Registered last so the state they are given is fully defined above. The
   # observers must exist for the whole session: a Ctrl+Enter can arrive while
@@ -1393,9 +1829,14 @@ server <- function(input, output, session) {
       a <- analysis_data()
       if (is.null(a)) character(0) else a$imports
     }),
+    help_topic = active_help_topic,
     validation = validation_data,
     parsed     = parsed_data,
-    analysis   = analysis_data,
+    docs       = open_docs,
+    active_doc = active_doc_id,
+    switch_doc = function(id) switch_to_doc(id),
+    close_doc  = function(id) close_doc(id),
+    new_doc    = function() new_doc(),
     touch      = function() session_revision(session_revision() + 1L),
     restart    = function() {
       live <- live_session()
@@ -1411,7 +1852,7 @@ server <- function(input, output, session) {
   studio_files_pane_server(input, output, session, studio_state)
   studio_plots_pane_server(input, output, session, studio_state)
   studio_packages_pane_server(input, output, session, studio_state)
-  studio_help_pane_server(input, output, session)
+  studio_help_pane_server(input, output, session, studio_state)
   studio_learn_pane_server(input, output, session, studio_state)
   studio_chrome_server(input, output, session, studio_state)
 }

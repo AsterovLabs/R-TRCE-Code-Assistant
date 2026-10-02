@@ -137,6 +137,56 @@
   --rt-glow-accent:   0 0 0 1px rgba(136,57,239,.30), 0 0 20px -6px rgba(136,57,239,.30);
 }
 
+/* Cassie theme: Dark coat surfaces, white ruff/mane & socks, orange streak blaze */
+[data-rtrce-theme="cassie"] {
+  /* Surfaces -- Dark obsidian and warm charcoal coat */
+  --rt-crust:      #0e0d13;
+  --rt-mantle:     #15141c;
+  --rt-base:       #1b1a24;
+  --rt-surface-0:  #262433;
+  --rt-surface-1:  #363347;
+  --rt-surface-2:  #49465e;
+  --rt-overlay-0:  #676382;
+  --rt-overlay-1:  #8985a6;
+  --rt-overlay-2:  #aba6cc;
+
+  /* Text -- White mane and socks, crisp and soft whites */
+  --rt-text:       #f9fafb;
+  --rt-text-soft:  #f0f1f5;
+  --rt-text-muted: #d1d5db;
+  --rt-text-faint: #9ca3af;
+
+  /* Accents -- The fiery orange blaze across her face + white ruff highlights */
+  --rt-mauve:      #ff7828;
+  --rt-blue:       #ff9d5c;
+  --rt-teal:       #fdfdfd;
+  --rt-green:      #4ade80;
+  --rt-yellow:     #fbbf24;
+  --rt-peach:      #ff8c38;
+  --rt-maroon:     #f87171;
+  --rt-red:        #ef4444;
+  --rt-pink:       #f472b6;
+  --rt-sapphire:   #f97316;
+
+  /* Meaning */
+  --rt-ok:    var(--rt-green);
+  --rt-warn:  var(--rt-yellow);
+  --rt-error: var(--rt-red);
+  --rt-info:  var(--rt-blue);
+  --rt-learn: #ff8c38;
+
+  /* Signature gradient -- Orange blaze into clean white ruff into warm amber */
+  --rt-grad:      linear-gradient(135deg, #ff7828 0%, #ffffff 48%, #ff9d5c 100%);
+  --rt-grad-soft: linear-gradient(135deg, rgba(255,120,40,.20) 0%, rgba(255,255,255,.14) 48%, rgba(255,157,92,.12) 100%);
+
+  /* Borders and elevation */
+  --rt-border:        rgba(255, 120, 40, 0.22);
+  --rt-border-strong: rgba(255, 120, 40, 0.45);
+  --rt-border-plain:  #2e2c3d;
+  --rt-glow:          0 0 0 1px rgba(255,120,40,.14), 0 18px 40px -18px rgba(0,0,0,.85);
+  --rt-glow-accent:   0 0 0 1px rgba(255,120,40,.45), 0 0 24px -6px rgba(255,120,40,.55);
+}
+
 /* -----------------------------------------------------------------------------
  * 2. Base
  * -------------------------------------------------------------------------- */

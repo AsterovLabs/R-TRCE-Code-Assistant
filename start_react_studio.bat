@@ -41,10 +41,13 @@ if %errorlevel% neq 0 (
     if exist "%ProgramFiles%\nodejs\node.exe" (
         set "NODE_BIN=%ProgramFiles%\nodejs\node.exe"
     ) else (
-        echo [!] Error: Node.js is required to run the React Studio backend.
-        echo Please install Node.js (v18+) from https://nodejs.org/
-        pause
-        exit /b 1
+        echo ==================================================================
+        echo   [i] Note: Node.js was not detected on this computer.
+        echo   Launching interactive Shiny Studio workspace instead...
+        echo   (Install Node.js v18+ from https://nodejs.org to use React Studio)
+        echo ==================================================================
+        call "%~dp0start_studio.bat"
+        exit /b %ERRORLEVEL%
     )
 )
 echo [OK] Found Node.js: %NODE_BIN%
@@ -73,8 +76,17 @@ echo ==================================================================
 echo   R-TRCE React Studio running at: http://%HOST%:%PORT%
 echo ==================================================================
 
-start http://%HOST%:%PORT%
 set "RSCRIPT_BIN=%RSCRIPT_BIN%"
+set "ELECTRON_BIN=%~dp0studio\server\node_modules\.bin\electron.cmd"
+
+if exist "%ELECTRON_BIN%" (
+    echo [*] Launching Native Desktop IDE...
+    call "%ELECTRON_BIN%" "%~dp0studio\server\electron-main.js"
+    exit /b %ERRORLEVEL%
+)
+
+:: Standalone App Window Fallback (Edge / Chrome)
+start msedge.exe --app="http://%HOST%:%PORT%" 2>nul || start chrome.exe --app="http://%HOST%:%PORT%" 2>nul || start http://%HOST%:%PORT%
 "%NODE_BIN%" "%~dp0studio\server\server.js"
 
 pause

@@ -59,25 +59,25 @@ usage <- function() {
 "r_trce.R -- R-TRCE Code Assistant
 
 WHAT IT DOES
-  Reads an R script, explains what its functions and data structures actually do,
-  and writes standardised @trce-* documentation blocks into the file for you.
+  Reads an R script or project directory, explains what its functions and data structures actually do,
+  and writes standardised @trce-* documentation blocks for you.
 
 USAGE
-  Rscript r_trce.R <command> <file> [options]
+  Rscript r_trce.R <command> <file-or-dir> [options]
   Rscript r_trce.R help
 
 COMMANDS
 
   ANALYSE  (read-only: nothing on disk is changed)
-    parse <file>                    List the components found in the file
-    explain <file> [--md]           Full architecture write-up plus the call graph
+    parse <file-or-dir>             List the components or project files found
+    explain <file-or-dir> [--md]    Full architecture write-up plus the call graph
     run <file> [options]            Run the file in a live session and print the transcript
     doctor                          Check the R version and every package the tool needs
 
   ANNOTATE & AUDIT
-    annotate <file> [options]       Write @trce-* blocks into the file
-    check <file>                    Audit existing blocks (fields, ID clashes, coverage)
-    export-traces <file> [--out F]  Export the trace index as JSON for the TRCE control plane
+    annotate <file-or-dir> [opts]   Write @trce-* blocks into the file or project
+    check <file-or-dir>             Audit existing blocks (fields, ID clashes, coverage)
+    export-traces <file-or-dir>     Export the trace index as JSON for the TRCE control plane
 
   LEARN  (built for students)
     tutor <file>                    Guided walkthrough of the code, component by component
@@ -86,12 +86,12 @@ COMMANDS
     teach <file> [line]             Plain-language concept breakdown, or deep-dive on one line
 
   TOOLS
-    studio [--react] [port]         Open interactive web Studio (default: Shiny port 8083, --react port 8084)
+    studio [dir] [--shiny] [port]   Open interactive Studio for a project (default port 8084)
 
 ANNOTATE OPTIONS
-  --inplace, -i                   Overwrite the target file with annotated code
-  --out, -o PATH                  Write annotated code to specified output file
-  --prefix NAME                   Trace ID prefix (default: 'trce-r')
+  --inplace, -i                   Overwrite the target file(s) with annotated code
+  --out, -o PATH                  Write annotated code to specified output file or directory
+  --prefix NAME                   Trace ID prefix (default: 'trce-r' or auto per module)
   --style STYLE                   Comment style: 'jsdoc' (default) or 'roxygen'
   --no-header                     Skip generating the file-level module header
 
@@ -100,23 +100,23 @@ RUN OPTIONS
   --wd DIR                        Working directory for the run, so relative paths resolve like a normal session
 
 EXAMPLES
-  # First time here? Check your environment, then read a file:
+  # First time here? Check your environment, then read a file or project:
   Rscript r_trce.R doctor
   Rscript r_trce.R explain path/to/script.R
+  Rscript r_trce.R explain path/to/project_dir
 
   # See what the code actually does when it runs:
   Rscript r_trce.R run path/to/script.R
 
-  # Studying? Start with the guided walkthrough:
-  Rscript r_trce.R tutor path/to/script.R
+  # Check an entire project's TRCE coverage:
+  Rscript r_trce.R check .
+  Rscript r_trce.R check path/to/project_dir
 
-  # Document a file (preview first, then write it out):
-  Rscript r_trce.R annotate path/to/script.R
-  Rscript r_trce.R annotate path/to/script.R --out annotated_script.R
-  Rscript r_trce.R annotate path/to/script.R --inplace
+  # Batch document a project:
+  Rscript r_trce.R annotate path/to/project_dir --inplace
 
-  # Confirm the result:
-  Rscript r_trce.R check path/to/script.R
+  # Open a project directly in Studio:
+  Rscript r_trce.R studio path/to/project_dir
 
 TIP
   Nothing is ever modified without --inplace or --out.
@@ -161,40 +161,40 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   }
 
   if (cmd == "studio") {
-    is_react <- any(args %in% c("--react", "-r"))
-    if (is_react) {
-      launcher <- file.path(script_dir, if (.Platform$OS.type == "windows") "start_react_studio.bat" else "start_react_studio.sh")
-      if (file.exists(launcher)) {
-        port_arg <- args[!args %in% c("--react", "-r")][1]
-        if (!is.na(port_arg) && !is.na(as.integer(port_arg))) {
-          Sys.setenv(PORT = port_arg)
-        }
-        if (.Platform$OS.type == "windows") {
-          system2("cmd.exe", c("/c", shQuote(launcher)))
-        } else {
-          system2("bash", shQuote(launcher))
-        }
-        quit(status = 0)
-      } else {
-        cat(sprintf("Error: React launcher '%s' not found.\n", launcher), file = stderr())
-        quit(status = 1)
-      }
+    is_shiny <- any(args %in% c("--shiny", "-s"))
+    react_launcher <- file.path(script_dir, if (.Platform$OS.type == "windows") "start_react_studio.bat" else "start_react_studio.sh")
+    app_file <- file.path(script_dir, "app.R")
+
+    # Check if a directory path was provided
+    dir_candidate <- args[!args %in% c("--react", "-r", "--shiny", "-s") & !grepl("^[0-9]+$", args)][1]
+    if (!is.na(dir_candidate) && dir.exists(dir_candidate)) {
+      Sys.setenv(PROJECT_DIR = normalizePath(dir_candidate, winslash = "/"))
     }
 
-    app_file <- file.path(script_dir, "app.R")
+    port_candidate <- args[!args %in% c("--react", "-r", "--shiny", "-s") & grepl("^[0-9]+$", args)][1]
+    if (!is.na(port_candidate)) {
+      Sys.setenv(PORT = port_candidate)
+    }
+
+    if (!is_shiny && file.exists(react_launcher)) {
+      if (.Platform$OS.type == "windows") {
+        system2("cmd.exe", c("/c", shQuote(react_launcher)))
+      } else {
+        system2("bash", shQuote(react_launcher))
+      }
+      quit(status = 0)
+    }
+
     if (!file.exists(app_file)) {
       cat(sprintf("Error: app.R not found in '%s'\n", script_dir), file = stderr())
       quit(status = 1)
-    }
-    if (length(args) > 0 && !is.na(as.integer(args[1]))) {
-      Sys.setenv(PORT = args[1])
     }
     source(app_file)
     quit(status = 0)
   }
 
   if (length(args) == 0) {
-    cat(sprintf("Error: Command '%s' requires a target file path.\n\n", cmd), file = stderr())
+    cat(sprintf("Error: Command '%s' requires a target file or project directory path.\n\n", cmd), file = stderr())
     usage()
     quit(status = 1)
   }
@@ -203,52 +203,79 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   options_args <- args[-1]
 
   if (!file.exists(target_file)) {
-    cat(sprintf("Error: File not found: '%s'\n", target_file), file = stderr())
+    cat(sprintf("Error: File or directory not found: '%s'\n", target_file), file = stderr())
     quit(status = 1)
   }
 
+  is_dir <- dir.exists(target_file)
+
   tryCatch(switch(cmd,
     parse = {
-      parsed <- parse_r_file(target_file)
-      analysis <- analyze_r_file(parsed)
-      cat(sprintf("Parsed %s successfully (%d lines, %d expressions).\n\n",
-                  basename(target_file), parsed$total_lines, length(parsed$expressions)))
-      cat("Archetype: ", analysis$file_type, "\n")
-      cat("Imports:   ",
-          if (length(analysis$imports) > 0) paste(analysis$imports, collapse = ", ") else "none (base R only)",
-          "\n\n")
-
-      comps <- select_annotatable_components(analysis$components)
-      if (length(comps) == 0) {
-        cat("No annotatable components found.\n")
-        cat("(Nothing in this file looks like a function, Shiny block, schema, or CLI runner yet.)\n")
-      } else {
-        cat(sprintf("Identified %d component(s):\n", length(comps)))
-        for (comp in comps) {
-          cat(sprintf("  * %-20s [%-16s] (lines %d-%d)\n", comp$name, comp$kind, comp$line1, comp$line2))
+      if (is_dir) {
+        meta <- detect_project_metadata(target_file)
+        cat(sprintf("Project: %s [%s]\n", meta$name, meta$type))
+        if (!is.null(meta$title)) cat(sprintf("Title:   %s\n", meta$title))
+        cat(sprintf("Path:    %s\n", meta$dir))
+        cat(sprintf("Found %d R source file(s):\n", length(meta$files)))
+        for (f in meta$files) {
+          p <- tryCatch(parse_r_file(f), error = function(e) NULL)
+          n_exp <- if (!is.null(p)) length(p$expressions) else 0L
+          cat(sprintf("  * %-35s (%d expressions)\n", basename(f), n_exp))
         }
-        cat(sprintf("\nNext: Rscript r_trce.R explain \"%s\"   (full architecture write-up)\n", target_file))
+        cat(sprintf("\nNext: Rscript r_trce.R explain \"%s\"   (full project architecture)\n", target_file))
+      } else {
+        parsed <- parse_r_file(target_file)
+        analysis <- analyze_r_file(parsed)
+        cat(sprintf("Parsed %s successfully (%d lines, %d expressions).\n\n",
+                    basename(target_file), parsed$total_lines, length(parsed$expressions)))
+        cat("Archetype: ", analysis$file_type, "\n")
+        cat("Imports:   ",
+            if (length(analysis$imports) > 0) paste(analysis$imports, collapse = ", ") else "none (base R only)",
+            "\n\n")
+
+        comps <- select_annotatable_components(analysis$components)
+        if (length(comps) == 0) {
+          cat("No annotatable components found.\n")
+          cat("(Nothing in this file looks like a function, Shiny block, schema, or CLI runner yet.)\n")
+        } else {
+          cat(sprintf("Identified %d component(s):\n", length(comps)))
+          for (comp in comps) {
+            cat(sprintf("  * %-20s [%-16s] (lines %d-%d)\n", comp$name, comp$kind, comp$line1, comp$line2))
+          }
+          cat(sprintf("\nNext: Rscript r_trce.R explain \"%s\"   (full architecture write-up)\n", target_file))
+        }
       }
     },
 
-
     explain = {
       is_md <- "--md" %in% options_args
-      parsed <- parse_r_file(target_file)
-      analysis <- analyze_r_file(parsed)
-      exp <- explain_r_file(parsed, analysis)
-      if (is_md) {
-        cat(exp$markdown, "\n")
-      } else {
+      if (is_dir) {
+        exp <- explain_project(target_file, markdown = is_md)
         cat(exp$text, "\n")
+        cat(sprintf("\nNext: Rscript r_trce.R check \"%s\"   (audit project TRCE coverage)\n", target_file))
+      } else {
+        parsed <- parse_r_file(target_file)
+        analysis <- analyze_r_file(parsed)
+        exp <- explain_r_file(parsed, analysis)
+        if (is_md) {
+          cat(exp$markdown, "\n")
+        } else {
+          cat(exp$text, "\n")
+        }
+        cat(sprintf("\nNext: Rscript r_trce.R annotate \"%s\"   (add @trce-* documentation)\n", target_file))
       }
-      cat(sprintf("\nNext: Rscript r_trce.R annotate \"%s\"   (add @trce-* documentation)\n", target_file))
     },
 
     # Execute the file in a real session and show what happened, expression by
     # expression. This is the headless twin of the Studio console, and it drives
     # the same engine (R/runtime.R) so the two can never diverge.
     run = {
+      if (is_dir) {
+        cat(sprintf("Error: Command 'run' requires an individual R script file, not a directory ('%s').\n", target_file), file = stderr())
+        cat("To run a project entrypoint, specify the script directly, e.g. Rscript r_trce.R run path/to/main.R\n", file = stderr())
+        quit(status = 1)
+      }
+
       timeout_val <- 10
       to_idx <- which(options_args %in% c("--timeout", "-t"))
       if (length(to_idx) > 0 && length(options_args) >= to_idx + 1) {
@@ -336,6 +363,10 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     },
 
     teach = {
+      if (is_dir) {
+        cat(sprintf("Error: Command 'teach' operates on a single R script. Use 'rtrce explain %s' for project overviews.\n", target_file), file = stderr())
+        quit(status = 1)
+      }
       target_line <- if (length(options_args) > 0) suppressWarnings(as.integer(options_args[1])) else NA_integer_
       parsed <- parse_r_file(target_file)
       analysis <- analyze_r_file(parsed)
@@ -396,6 +427,10 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     },
 
     tutor = {
+      if (is_dir) {
+        cat(sprintf("Error: Command 'tutor' operates on a single R script. Use 'rtrce explain %s' for project overviews.\n", target_file), file = stderr())
+        quit(status = 1)
+      }
       parsed <- parse_r_file(target_file)
       analysis <- analyze_r_file(parsed)
       walkthrough <- generate_student_explanation(parsed, analysis)
@@ -404,6 +439,10 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     },
 
     pitfalls = {
+      if (is_dir) {
+        cat(sprintf("Error: Command 'pitfalls' operates on a single R script. Use 'rtrce check %s' for project audits.\n", target_file), file = stderr())
+        quit(status = 1)
+      }
       parsed <- parse_r_file(target_file)
       analysis <- analyze_r_file(parsed)
       pitfalls <- detect_student_pitfalls(parsed, analysis)
@@ -428,6 +467,10 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
     },
 
     quiz = {
+      if (is_dir) {
+        cat(sprintf("Error: Command 'quiz' operates on a single R script.\n"), file = stderr())
+        quit(status = 1)
+      }
       is_md <- "--md" %in% options_args
       parsed <- parse_r_file(target_file)
       analysis <- analyze_r_file(parsed)
@@ -469,63 +512,124 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
 
       no_header <- "--no-header" %in% options_args
 
-      parsed <- parse_r_file(target_file)
-      analysis <- analyze_r_file(parsed)
-      injected <- inject_annotations(parsed, analysis, prefix = prefix, style = style, add_file_header = !no_header)
-
-      cat(sprintf("Synthesized %d TRCE annotation blocks for '%s'.\n", injected$blocks_added, basename(target_file)))
-      if (injected$blocks_added == 0) {
-        cat("Nothing to add -- every annotatable component here already has a @trce-* block.\n")
-      }
-
-      if (inplace) {
-        writeLines(injected$annotated_code, target_file)
-        cat(sprintf("Updated '%s' in place.\n", target_file))
-      } else if (!is.null(out_file)) {
-        writeLines(injected$annotated_code, out_file)
-        cat(sprintf("Wrote annotated file to '%s'.\n", out_file))
+      if (is_dir) {
+        prefix_override <- if (!identical(prefix, "trce-r")) prefix else NULL
+        res <- annotate_project(target_file, inplace = inplace, out_dir = out_file,
+                                style = style, add_file_header = !no_header,
+                                prefix_override = prefix_override)
+        cat("================================================================================\n")
+        cat(sprintf("  PROJECT BATCH ANNOTATION: %s (%d files)\n", basename(target_file), res$file_count))
+        cat("================================================================================\n")
+        cat(sprintf("  Total blocks added: %d\n", res$total_blocks_added))
+        cat("--------------------------------------------------------------------------------\n")
+        for (f in names(res$file_results)) {
+          r <- res$file_results[[f]]
+          status_str <- if (!is.null(r$error)) paste0("[ERROR: ", r$error, "]") else if (inplace) "[updated]" else "[preview]"
+          cat(sprintf("  * %-34s : %d block(s) %s\n", basename(f), r$blocks_added, status_str))
+        }
+        cat("================================================================================\n")
+        if (!inplace && is.null(out_file)) {
+          cat("\nNote: Dry-run preview only. Use --inplace to write directly or --out <dir> to output elsewhere.\n")
+        }
+        cat(sprintf("\nNext: Rscript r_trce.R check \"%s\"   (audit project annotations)\n", target_file))
       } else {
-        cat("\n--- ANNOTATED SOURCE PREVIEW (Use --inplace or --out to save) ---\n\n")
-        cat(injected$annotated_code, "\n")
+        parsed <- parse_r_file(target_file)
+        analysis <- analyze_r_file(parsed)
+        injected <- inject_annotations(parsed, analysis, prefix = prefix, style = style, add_file_header = !no_header)
+
+        cat(sprintf("Synthesized %d TRCE annotation blocks for '%s'.\n", injected$blocks_added, basename(target_file)))
+        if (injected$blocks_added == 0) {
+          cat("Nothing to add -- every annotatable component here already has a @trce-* block.\n")
+        }
+
+        if (inplace) {
+          writeLines(injected$annotated_code, target_file)
+          cat(sprintf("Updated '%s' in place.\n", target_file))
+        } else if (!is.null(out_file)) {
+          writeLines(injected$annotated_code, out_file)
+          cat(sprintf("Wrote annotated file to '%s'.\n", out_file))
+        } else {
+          cat("\n--- ANNOTATED SOURCE PREVIEW (Use --inplace or --out to save) ---\n\n")
+          cat(injected$annotated_code, "\n")
+        }
+        cat(sprintf("\nNext: Rscript r_trce.R check \"%s\"   (audit the annotations)\n", target_file))
       }
-      cat(sprintf("\nNext: Rscript r_trce.R check \"%s\"   (audit the annotations)\n", target_file))
     },
 
     check = {
-      val <- validate_r_annotations(target_file)
-      cat("================================================================================\n")
-      cat(sprintf("  TRCE ANNOTATION AUDIT: %s\n", basename(target_file)))
-      cat("================================================================================\n")
-      cat(sprintf("  Directives found:    %d\n", val$total_traces))
-      cat(sprintf("  Well-formed IDs:     %d\n", val$valid_traces))
-      cat(sprintf("  Annotatable blocks:  %d\n", val$total_targets))
-      cat(sprintf("  Already annotated:   %d\n", val$annotated_targets))
-      cat(sprintf("  Coverage:            %.1f%%\n", val$coverage_pct))
-      cat("--------------------------------------------------------------------------------\n")
-
-      if (length(val$unannotated_targets) > 0) {
-        cat("  Components still missing a @trce-* block:\n")
-        for (u in val$unannotated_targets) {
-          cat(sprintf("    - %s\n", u))
+      if (is_dir) {
+        val <- validate_project_annotations(target_file)
+        cat("================================================================================\n")
+        cat(sprintf("  PROJECT TRCE ANNOTATION AUDIT: %s\n", basename(target_file)))
+        cat("================================================================================\n")
+        cat(sprintf("  Project directory:   %s\n", val$project_dir))
+        cat(sprintf("  Total R files:       %d\n", val$file_count))
+        cat(sprintf("  Total components:    %d\n", val$total_components))
+        cat(sprintf("  Annotated targets:   %d\n", val$annotated_components))
+        cat(sprintf("  Overall coverage:    %.1f%%\n", val$coverage_pct))
+        cat(sprintf("  Total issues:        %d\n", val$total_issues))
+        cat("--------------------------------------------------------------------------------\n")
+        cat(sprintf("  %-32s %-12s %-10s %-8s\n", "FILE", "COMPONENTS", "COVERAGE", "STATUS"))
+        cat("  ----------------------------------------------------------------------------\n")
+        for (f in names(val$file_reports)) {
+          rep <- val$file_reports[[f]]
+          stat <- if (length(rep$issues) > 0) "DEFECTS" else if (rep$coverage_pct >= 100) "PASSED" else "INCOMPLETE"
+          cov_str <- sprintf("%.1f%%", rep$coverage_pct)
+          comp_str <- sprintf("%d / %d", rep$annotated_targets, rep$total_targets)
+          cat(sprintf("  %-32s %-12s %-10s %-8s\n", basename(f), comp_str, cov_str, stat))
         }
-        cat(sprintf("\n  Fix: Rscript r_trce.R annotate \"%s\" --inplace\n", target_file))
-        cat("\n")
-      }
-
-      if (length(val$issues) > 0) {
-        cat("  Issues detected:\n")
-        for (iss in val$issues) {
-          cat(sprintf("    [%s] Line %d: %s\n", iss$severity, iss$line, iss$message))
+        cat("================================================================================\n")
+        if (length(val$global_issues) > 0) {
+          cat("\n  CROSS-FILE CONFLICTS:\n")
+          for (gi in val$global_issues) {
+            cat(sprintf("   * [%s] %s\n", gi$severity, gi$message))
+          }
         }
-        cat("\nAudit status: FAILED\n")
-        cat("Hint: duplicate @trce-id values usually mean the file was annotated twice;\n")
-        cat("      make each ID unique, or re-run annotate with a different --prefix.\n")
-        quit(status = 1)
-      } else {
-        cat("  All checks passed: IDs unique, 6 fields present, coverage complete.\n")
-        cat("Audit status: PASSED\n")
-        if (val$total_targets > 0) {
+        if (!val$ok) {
+          cat("\nAudit status: FAILED (defects found or coverage < 100%)\n")
+          cat(sprintf("Fix: Rscript r_trce.R annotate \"%s\" --inplace\n", target_file))
+          quit(status = 1)
+        } else {
+          cat("  All checks passed: IDs unique, 6 fields present, coverage complete.\n")
+          cat("Audit status: PASSED\n")
           cat(sprintf("\nNext: Rscript r_trce.R export-traces \"%s\"   (machine-readable index)\n", target_file))
+        }
+      } else {
+        val <- validate_r_annotations(target_file)
+        cat("================================================================================\n")
+        cat(sprintf("  TRCE ANNOTATION AUDIT: %s\n", basename(target_file)))
+        cat("================================================================================\n")
+        cat(sprintf("  Directives found:    %d\n", val$total_traces))
+        cat(sprintf("  Well-formed IDs:     %d\n", val$valid_traces))
+        cat(sprintf("  Annotatable blocks:  %d\n", val$total_targets))
+        cat(sprintf("  Already annotated:   %d\n", val$annotated_targets))
+        cat(sprintf("  Coverage:            %.1f%%\n", val$coverage_pct))
+        cat("--------------------------------------------------------------------------------\n")
+
+        if (length(val$unannotated_targets) > 0) {
+          cat("  Components still missing a @trce-* block:\n")
+          for (u in val$unannotated_targets) {
+            cat(sprintf("    - %s\n", u))
+          }
+          cat(sprintf("\n  Fix: Rscript r_trce.R annotate \"%s\" --inplace\n", target_file))
+          cat("\n")
+        }
+
+        if (length(val$issues) > 0) {
+          cat("  Issues detected:\n")
+          for (iss in val$issues) {
+            cat(sprintf("    [%s] Line %d: %s\n", iss$severity, iss$line, iss$message))
+          }
+          cat("\nAudit status: FAILED\n")
+          cat("Hint: duplicate @trce-id values usually mean the file was annotated twice;\n")
+          cat("      make each ID unique, or re-run annotate with a different --prefix.\n")
+          quit(status = 1)
+        } else {
+          cat("  All checks passed: IDs unique, 6 fields present, coverage complete.\n")
+          cat("Audit status: PASSED\n")
+          if (val$total_targets > 0) {
+            cat(sprintf("\nNext: Rscript r_trce.R export-traces \"%s\"   (machine-readable index)\n", target_file))
+          }
         }
       }
     },
@@ -535,18 +639,29 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       out_idx <- which(options_args %in% c("--out", "-o"))
       out_file <- if (length(out_idx) > 0 && length(options_args) >= out_idx + 1) options_args[out_idx + 1] else NULL
 
-      val <- validate_r_annotations(target_file)
-      json_str <- export_trace_json(list(val))
-
-      if (!is.null(out_file)) {
-        writeLines(json_str, out_file)
-        cat(sprintf("Exported %d traces to '%s'.\n", length(val$entries), out_file))
+      if (is_dir) {
+        val <- validate_project_annotations(target_file)
+        json_str <- export_trace_json(val$file_reports)
+        if (!is.null(out_file)) {
+          writeLines(json_str, out_file)
+          cat(sprintf("Exported project traces to '%s'.\n", out_file))
+        } else {
+          cat(json_str, "\n")
+        }
       } else {
-        cat(json_str, "\n")
-      }
-      if (length(val$entries) == 0) {
-        cat("Note: no @trce-* directives were found, so the trace list is empty.\n", file = stderr())
-        cat(sprintf("      Run: Rscript r_trce.R annotate \"%s\" --inplace\n", target_file), file = stderr())
+        val <- validate_r_annotations(target_file)
+        json_str <- export_trace_json(list(val))
+
+        if (!is.null(out_file)) {
+          writeLines(json_str, out_file)
+          cat(sprintf("Exported %d traces to '%s'.\n", length(val$entries), out_file))
+        } else {
+          cat(json_str, "\n")
+        }
+        if (length(val$entries) == 0) {
+          cat("Note: no @trce-* directives were found, so the trace list is empty.\n", file = stderr())
+          cat(sprintf("      Run: Rscript r_trce.R annotate \"%s\" --inplace\n", target_file), file = stderr())
+        }
       }
     },
 

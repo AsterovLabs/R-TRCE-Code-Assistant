@@ -202,3 +202,104 @@ extract_all_trce_blocks <- function(raw_lines) {
 
   entries
 }
+
+# /**
+#  * @trce-id trce-validator-003
+#  * @trce-who Trace Validator Subsystem / Project Auditor
+#  * @trce-what Performs comprehensive multi-file TRCE validation, cross-file collision detection, and project coverage rollups
+#  * @trce-where validator.R -> validate_project_annotations | Upstream: CLI check router, Studio project overview | Downstream: validate_r_annotations, find_project_r_files
+#  * @trce-when Auditing an R project folder or running CI verification on a repository
+#  * @trce-why Ensures no duplicate trace IDs exist across any files and verifies total project coverage
+#  * @trce-how Iterates over all project files, tracks ID-to-file locations for global collision detection, and aggregates component coverage
+#  */
+validate_project_annotations <- function(project_dir, files = NULL) {
+  if (is.null(files)) {
+    files <- find_project_r_files(project_dir)
+  }
+
+  if (length(files) == 0) {
+    return(list(
+      ok = TRUE,
+      project_dir = project_dir,
+      file_count = 0L,
+      total_components = 0L,
+      annotated_components = 0L,
+      coverage_pct = 100,
+      total_issues = 0L,
+      global_issues = list(),
+      file_reports = list()
+    ))
+  }
+
+  file_reports <- list()
+  global_issues <- list()
+  id_locations <- list() # id -> list(file, line)
+
+  total_comps <- 0L
+  annotated_comps <- 0L
+  total_issues_count <- 0L
+
+  for (f in files) {
+    rel_path <- if (!is.null(project_dir) && nzchar(project_dir)) {
+      tryCatch(normalizePath(f, winslash = "/", mustWork = FALSE), error = function(e) f)
+    } else f
+
+    rep <- tryCatch(validate_r_annotations(f), error = function(e) {
+      list(
+        valid = FALSE,
+        file = basename(f),
+        file_path = f,
+        issues = list(list(id = "PARSE_ERROR", line = 1L, severity = "ERROR", message = conditionMessage(e))),
+        coverage = list(total = 0L, annotated = 0L, percent = 0)
+      )
+    })
+
+    # Check cross-file collisions for valid IDs found in this file
+    entries <- tryCatch(extract_all_trce_blocks(read_source_lines(f)$lines), error = function(e) list())
+    for (entry in entries) {
+      id <- entry$id
+      if (nzchar(id)) {
+        if (!is.null(id_locations[[id]])) {
+          prior <- id_locations[[id]]
+          if (!identical(prior$file, f)) {
+            issue <- list(
+              id = id,
+              file = f,
+              line = entry$line,
+              severity = "ERROR",
+              message = sprintf("Cross-file duplicate @trce-id '%s' found in '%s' (line %d). Already defined in '%s' (line %d).",
+                                id, basename(f), entry$line, basename(prior$file), prior$line)
+            )
+            global_issues[[length(global_issues) + 1L]] <- issue
+            rep$issues[[length(rep$issues) + 1L]] <- issue
+            rep$valid <- FALSE
+          }
+        } else {
+          id_locations[[id]] <- list(file = f, line = entry$line)
+        }
+      }
+    }
+
+    total_comps <- total_comps + (rep$total_targets %||% 0L)
+    annotated_comps <- annotated_comps + (rep$annotated_targets %||% 0L)
+    total_issues_count <- total_issues_count + length(rep$issues)
+    file_reports[[f]] <- rep
+  }
+
+  overall_cov <- if (total_comps > 0) round((annotated_comps / total_comps) * 100, 1) else 100
+
+  all_valid <- total_issues_count == 0 && (total_comps == 0 || annotated_comps == total_comps)
+
+  list(
+    ok = all_valid,
+    project_dir = project_dir,
+    file_count = length(files),
+    total_components = total_comps,
+    annotated_components = annotated_comps,
+    coverage_pct = overall_cov,
+    total_issues = total_issues_count,
+    global_issues = global_issues,
+    file_reports = file_reports
+  )
+}
+

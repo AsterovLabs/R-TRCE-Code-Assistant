@@ -1,0 +1,262 @@
+[
+  {
+    "pattern": "\\$ operator is invalid for atomic vectors",
+    "plain": "You used $ on a vector, but $ only works on lists and data frames.",
+    "causes": [
+      "The variable holds an atomic vector (numeric, character, logical) rather than a data.frame or list.",
+      "A function returned a vector or single column instead of a data frame.",
+      "A column selection with [ ] simplified to a vector (use drop = FALSE)."
+    ],
+    "fix": "Check class(x) to inspect the object. If x is a data frame, verify it was not reduced to a vector."
+  },
+  {
+    "pattern": "object '([^']+)' not found",
+    "plain": "R looked for a name and found nothing bound to it.",
+    "causes": [
+      "The name is misspelled, or the capitalisation differs: R is case sensitive.",
+      "It was created in an earlier session and is not in this one.",
+      "It exists, but not where this code can see it: inside a function only arguments and outer scopes are visible."
+    ],
+    "fix": "Check the spelling, run the code that creates it, or print ls() to see what does exist."
+  },
+  {
+    "pattern": "could not find function \"?([A-Za-z_.][A-Za-z0-9_.]*)\"?",
+    "plain": "R does not know a function by that name.",
+    "causes": [
+      "The package it lives in is installed but not attached: no library() call has run.",
+      "A typo, or a name from another language (len() is Python; R uses length()).",
+      "A variable with the same name is shadowing the function."
+    ],
+    "fix": "Add library(packageName) near the top, or type the name in the console without brackets to see what R has bound to it."
+  },
+  {
+    "pattern": "argument \"([^\"]+)\" is missing, with no default",
+    "plain": "A function was called without an argument it needs.",
+    "causes": [
+      "The argument was left out.",
+      "The argument name is misspelled, so R sees one unnamed argument and one missing."
+    ],
+    "fix": "Check the signature with ?function_name: every argument without a default must be supplied."
+  },
+  {
+    "pattern": "unused argument",
+    "plain": "An argument was passed that this function does not accept.",
+    "causes": [
+      "The name is misspelled, or it belongs to a different function.",
+      "The function changed and no longer takes that argument."
+    ],
+    "fix": "Compare the call with ?function_name -- argument names must match exactly."
+  },
+  {
+    "pattern": "non-numeric argument to (binary operator|mathematical function)",
+    "plain": "R expected numbers and got text.",
+    "causes": [
+      "A column was read as text (read.csv() keeps anything that does not look numeric as text).",
+      "A number arrived as a string: \"5\" is not 5.",
+      "as.numeric() was applied to a factor and returned level numbers instead of values."
+    ],
+    "fix": "Check the type with class(x) or str(x), then convert deliberately: as.numeric(as.character(x))."
+  },
+  {
+    "pattern": "subscript out of bounds",
+    "plain": "Something was indexed at a position that does not exist.",
+    "causes": [
+      "The index is past the end of the vector or data frame.",
+      "An empty result was indexed: x[1] where x has length 0.",
+      "The data has fewer rows than the number in the code assumes."
+    ],
+    "fix": "Print length(x) or nrow(df) first, and prefer seq_len(nrow(df)) to a fixed range."
+  },
+  {
+    "pattern": "replacement has ([0-9]+) rows, data has ([0-9]+)",
+    "plain": "A column was assigned a vector of the wrong length.",
+    "causes": [
+      "The replacement is longer or shorter than the number of rows.",
+      "One side was filtered and the other was not."
+    ],
+    "fix": "Build the replacement from the same object, e.g. df$new <- df$existing * 2."
+  },
+  {
+    "pattern": "object of type 'closure' is not subsettable",
+    "plain": "A function was used where data was expected.",
+    "causes": [
+      "A variable shares a name with a function this code calls (df, c, t and data are the usual culprits).",
+      "A function's name was used as if it held the function's result."
+    ],
+    "fix": "Rename the variable, or refer to the result of the call rather than the function itself."
+  },
+  {
+    "pattern": "the condition has length > 1",
+    "plain": "if() was given a vector of TRUE/FALSE values but needs exactly one.",
+    "causes": [
+      "The condition compares a whole column rather than a single value.",
+      "A filter or loop was intended, not a branch."
+    ],
+    "fix": "Use any(condition), all(condition), or the vectorised ifelse()/filter instead."
+  },
+  {
+    "pattern": "missing value where TRUE/FALSE needed",
+    "plain": "A condition evaluated to NA, so R could not decide which way to go.",
+    "causes": [
+      "A comparison involved NA: x == NA is NA, always.",
+      "A column has missing values that were never handled."
+    ],
+    "fix": "Test with is.na(x) and decide explicitly what missing values should do."
+  },
+  {
+    "pattern": "unexpected (symbol|'[^']*'|input|end of input)",
+    "plain": "R could not finish reading this code: it is a syntax problem, not a runtime one.",
+    "causes": [
+      "A bracket or quote is not closed on this line, or on an earlier one.",
+      "A comma is missing or extra inside a call.",
+      "Lines were run separately that R needs to see together."
+    ],
+    "fix": "Look at the line R quotes and one line above it: brackets pair up, and the error often points just past the real cause."
+  },
+  {
+    "pattern": "cannot open (the connection|file)",
+    "plain": "R could not read or write the file you named.",
+    "causes": [
+      "The path is relative and the working directory is not what you expect: getwd() shows it.",
+      "The file's name or case differs from what is on disk.",
+      "The folder does not exist yet."
+    ],
+    "fix": "Print getwd() and list.files(), then use the Files pane to set the directory."
+  },
+  {
+    "pattern": "there is no package called",
+    "plain": "The package is not installed.",
+    "causes": [
+      "It was never installed on this machine.",
+      "It is installed for a different R version or library path."
+    ],
+    "fix": "Install it once with install.packages(\"name\"), then library(name)."
+  },
+  {
+    "pattern": "number of items to replace is not a multiple of replacement length",
+    "plain": "You are trying to replace part of an object, but the sizes don't line up.",
+    "causes": [
+      "Assigning 3 values into a space that expects 5.",
+      "Trying to replace a subset of a vector with a vector of a different length."
+    ],
+    "fix": "Check the length of the items you are replacing and the length of the new values. They must match, or the new values must be a perfect multiple."
+  },
+  {
+    "pattern": "arguments imply differing number of rows",
+    "plain": "You are trying to create a data frame, but the columns are of different lengths.",
+    "causes": [
+      "Combining vectors of length 5 and length 6 into a `data.frame()`.",
+      "Creating a tibble with variables that do not have matching row counts."
+    ],
+    "fix": "Check the `length()` of each vector you are trying to combine and make sure they are exactly the same."
+  },
+  {
+    "pattern": "cannot coerce type 'closure' to vector of type",
+    "plain": "You accidentally used a function where R expected data.",
+    "causes": [
+      "Using a function name (like `mean`) instead of the result of the function (`mean(x)`).",
+      "Forgetting parentheses when calling a function."
+    ],
+    "fix": "Look for places where you used a function name without calling it with parentheses."
+  },
+  {
+    "pattern": "recursive default argument reference",
+    "plain": "A function argument's default value refers to itself or creates a loop.",
+    "causes": [
+      "Defining a function like `function(x = x)`.",
+      "An argument defaults to another argument that defaults back to the first."
+    ],
+    "fix": "Fix the function definition so that default arguments use explicit values rather than referring to themselves."
+  },
+  {
+    "pattern": "promise already under evaluation",
+    "plain": "There is a circular dependency caused by lazy evaluation in R.",
+    "causes": [
+      "Assigning a variable to itself within a function argument.",
+      "A variable name masks a function argument, causing an infinite loop when evaluated."
+    ],
+    "fix": "Rename variables inside your function to avoid conflicting with the argument names."
+  },
+  {
+    "pattern": "attempt to apply non-function",
+    "plain": "You are trying to call something as a function, but it is just a normal variable.",
+    "causes": [
+      "Writing something like `5(x)` or `my_var(x)` where `my_var` is a number or data frame.",
+      "Missing an operator like `*` between a number and a parenthesis, e.g., `2(x+1)`."
+    ],
+    "fix": "Check if you missed a multiplication sign or if you accidentally put parentheses right after a variable name."
+  },
+  {
+    "pattern": "incorrect number of dimensions",
+    "plain": "You are trying to subset data using the wrong number of dimensions (commas).",
+    "causes": [
+      "Using `vec[1, 2]` on a 1-dimensional vector.",
+      "Using `df[1]` on a 2-dimensional data frame when you meant `df[1, ]`."
+    ],
+    "fix": "If it's a vector, use one dimension `vec[index]`. If it's a data frame or matrix, use two dimensions `df[row, col]`."
+  },
+  {
+    "pattern": "undefined columns selected",
+    "plain": "You are trying to extract a column that does not exist in the data frame.",
+    "causes": [
+      "Typo in the column name.",
+      "The column was dropped or renamed in a previous step.",
+      "Using the wrong case (e.g., `Name` instead of `name`)."
+    ],
+    "fix": "Run `colnames(df)` to see the exact spelling and case of all available columns."
+  },
+  {
+    "pattern": "longer object length is not a multiple of shorter object length",
+    "plain": "You are combining two vectors of different lengths, and R had to repeat the shorter one unevenly.",
+    "causes": [
+      "Adding a vector of length 3 to a vector of length 5.",
+      "Comparing vectors of mismatched sizes."
+    ],
+    "fix": "Make sure the vectors are the same length, or that the longer one is an exact multiple of the shorter one's length."
+  },
+  {
+    "pattern": "cannot allocate vector of size",
+    "plain": "R ran out of memory (RAM) trying to perform an operation or load data.",
+    "causes": [
+      "Loading a dataset that is too large for your computer's memory.",
+      "Creating an extremely large matrix or performing a very memory-intensive calculation."
+    ],
+    "fix": "Try removing unused objects with `rm()`, taking a sample of the data, or running the code on a machine with more RAM."
+  },
+  {
+    "pattern": "no applicable method for",
+    "plain": "You are using a function on a type of object it wasn't designed to handle.",
+    "causes": [
+      "Calling a modeling function on plain text.",
+      "Passing a list into a function that requires a matrix."
+    ],
+    "fix": "Check the class of your object using `class()`, and read the function's help page to see what types of objects it accepts."
+  },
+  {
+    "pattern": "duplicate 'row.names' are not allowed",
+    "plain": "You are trying to create a data frame with duplicate row names.",
+    "causes": [
+      "Setting `row.names` to a vector that contains repeating values.",
+      "Merging datasets in a way that duplicates row names."
+    ],
+    "fix": "Ensure all row names are unique, or just let R generate automatic sequential row names."
+  },
+  {
+    "pattern": "need finite values",
+    "plain": "A mathematical function or plot received invalid numbers like Infinity or NaN (Not a Number).",
+    "causes": [
+      "Dividing by zero, which creates `Inf`.",
+      "Passing limits to a plot (like `xlim` or `ylim`) that evaluate to `NA` or `Inf`."
+    ],
+    "fix": "Check your data for `Inf`, `-Inf`, or `NaN` values and handle them before plotting or calculating."
+  },
+  {
+    "pattern": "invalid factor level, NA generated",
+    "plain": "You tried to assign a value to a factor variable, but the value isn't an allowed category.",
+    "causes": [
+      "Assigning \"Apple\" to a column that only allows \"Banana\" and \"Orange\".",
+      "A typo in the category name you are assigning."
+    ],
+    "fix": "Check the allowed categories using `levels()`. If you need to add a new one, convert the factor to a character vector first."
+  }
+]

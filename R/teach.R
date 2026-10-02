@@ -41,56 +41,27 @@
 # Each entry is triggered by a pattern in a line's source and explains the *idea*,
 # not the syntax -- because the syntax is visible and the idea is not. Kept as
 # data so it can be taught, tested and extended without touching any logic.
-TEACH_CONCEPTS <- list(
-  list(id = "vectorised", pattern = "\\b(lapply|sapply|vapply|mapply|Map|apply|tapply)\\s*\\(",
-       name = "Vectorised iteration",
-       why = "R applies the function for you, in C, and returns a result of a predictable shape instead of you filling a container by hand.",
-       hint = "Prefer vapply() when you know the result type: it errors rather than returning a surprising shape."),
-  list(id = "loop", pattern = "^\\s*for\\s*\\(",
-       name = "Explicit loop",
-       why = "The body runs once per element and the loop itself returns NULL, so anything you want afterwards must be assigned first.",
-       hint = "Growing a vector with c() inside a loop copies the whole vector every pass. Preallocate, or use a vectorised function."),
-  list(id = "colon_range", pattern = "1\\s*:\\s*(length|nrow|ncol)\\s*\\(",
-       name = "1:length(x) is not safe",
-       why = "When x is empty, 1:length(x) is 1:0, which counts down, so the loop runs twice over nothing.",
-       hint = "Use seq_along(x) or seq_len(nrow(df)): both return an empty sequence when there is nothing."),
-  list(id = "na_test", pattern = "(==|!=)\\s*NA\\b",
-       name = "NA is not a value you can compare",
-       why = "NA means unknown, so x == NA is NA rather than TRUE or FALSE, and filtering on it selects nothing.",
-       hint = "Test with is.na(x); use which() or %in% when you need positions."),
-  list(id = "factor_numeric", pattern = "as\\.numeric\\s*\\(\\s*[A-Za-z_.][A-Za-z0-9_.]*\\s*\\)",
-       name = "Factors are integers underneath",
-       why = "as.numeric() on a factor returns the level numbers, not the labels, so categorical data silently becomes 1, 2, 3.",
-       hint = "Convert the labels first: as.numeric(as.character(x))."),
-  list(id = "super_assign", pattern = "<<-",
-       name = "Superassignment reaches outside the function",
-       why = "<<- searches enclosing environments and writes there, so the effect is invisible in the function's signature.",
-       hint = "Return the value and let the caller decide. Use <<- only for genuine state, and name it accordingly."),
-  list(id = "pipe", pattern = "\\|>|%>%",
-       name = "The pipe rewrites the call",
-       why = "x |> f(y) is exactly f(x, y). It is syntax, not a function call, so read a pipeline as the nested calls it stands for.",
-       hint = "Read top to bottom: each step receives the previous step's value as its first argument."),
-  list(id = "attach", pattern = "\\battach\\s*\\(",
-       name = "attach() puts every column on the search path",
-       why = "Columns become bare names, so one can silently shadow a function or another object.",
-       hint = "Use with(df, ...), df$col, or a dplyr verb instead."),
-  list(id = "setwd", pattern = "\\bsetwd\\s*\\(",
-       name = "setwd() ties the script to one machine",
-       why = "A script that sets its own directory only runs where that directory exists, and fails quietly elsewhere.",
-       hint = "Build paths from a known root: file.path(root, \"data\", \"x.csv\")."),
-  list(id = "dollar", pattern = "\\$[A-Za-z_.]",
-       name = "$ pulls a single column out",
-       why = "$ returns a vector, not a one-column data frame, which changes what every later function receives.",
-       hint = "Use df[[\"col\"]] when the column name is held in a variable, and df[\"col\"] to keep the data-frame shape."),
-  list(id = "recycle", pattern = "(\\+|-|\\*|/)\\s*[0-9]",
-       name = "R recycles short vectors",
-       why = "Arithmetic between a vector and a single number repeats that number, which is why element-wise maths needs no loop.",
-       hint = "Recycling is only a bug when the lengths do not divide evenly -- R warns when that happens."),
-  list(id = "closure", pattern = "function\\s*\\(",
-       name = "Functions are closures",
-       why = "A function carries the environment it was defined in, which is why it can use a variable you never passed it.",
-       hint = "That is also why a function defined inside a loop can capture the wrong value if you are not careful.")
-)
+# Loaded from the pedagogical registry (registry/concepts.json + registry/concepts/r.json).
+# The merged list has the same shape as the old inline definition:
+#   $id, $pattern, $name, $why, $hint (plus $prerequisites and $trap from the registry).
+# Wrapped in a function so the JSON is only read when first needed.
+TEACH_CONCEPTS <- NULL
+
+# /**
+#  * @trce-id trce-teach-006
+#  * @trce-who Studio Teaching Layer / Concept Cache
+#  * @trce-what Retrieves cached concept definitions and patterns loaded from the pedagogical registry
+#  * @trce-where teach.R -> get_teach_concepts | Upstream: concept_tags_for_lines, explain_code_line | Downstream: load_registry
+#  * @trce-when On first concept lookup per session; cached in TEACH_CONCEPTS thereafter
+#  * @trce-why Provides memoized access to language concept patterns without re-reading JSON from disk
+#  * @trce-how Evaluates load_registry("concepts", "r") on NULL, assigning to parent namespace cache
+#  */
+get_teach_concepts <- function() {
+  if (is.null(TEACH_CONCEPTS)) {
+    TEACH_CONCEPTS <<- load_registry("concepts", "r")
+  }
+  TEACH_CONCEPTS
+}
 
 # -----------------------------------------------------------------------------
 # 2. Gutter hints
@@ -158,7 +129,7 @@ concept_tags_for_lines <- function(parsed_obj, analysis) {
   # --- concepts --------------------------------------------------------------
   for (i in seq_along(lines)) {
     if (grepl("^\\s*#", lines[i])) next
-    for (concept in TEACH_CONCEPTS) {
+    for (concept in get_teach_concepts()) {
       if (grepl(concept$pattern, lines[i], perl = TRUE)) {
         # A structural tag wins: "this is a function" teaches more than
         # "this line mentions $", and one glyph per line stays readable.
@@ -277,7 +248,7 @@ explain_code_line <- function(parsed_obj, analysis, line) {
   is_comment <- grepl("^\\s*#", code)
 
   concepts <- if (is_comment) list() else {
-    Filter(function(c) grepl(c$pattern, code, perl = TRUE), TEACH_CONCEPTS)
+    Filter(function(c) grepl(c$pattern, code, perl = TRUE), get_teach_concepts())
   }
 
   pitfalls <- if (is_comment) list() else tryCatch({
@@ -310,94 +281,28 @@ explain_code_line <- function(parsed_obj, analysis, line) {
 # sentence, the usual causes, and the next thing to try.
 #
 # The map is data, so a new pattern is a one-line change and one new test.
+# Loaded from the pedagogical registry (registry/errors/r.json).
+# The list has the same shape as the old inline definition:
+#   $pattern, $plain, $causes, $fix.
+# Wrapped in a function so the JSON is only read when first needed.
+TEACH_ERRORS <- NULL
+
 # /**
 #  * @trce-id trce-teach-005
-#  * @trce-who Data Architecture / Schema Registry
-#  * @trce-what Defines relational data schema specifications, constraints, or join paths for 'TEACH_ERRORS'
-#  * @trce-where teach.R -> TEACH_ERRORS | Upstream: Top-level invocation or external callers | Downstream: Leaf node / standard library
-#  * @trce-when At module source time during namespace evaluation
-#  * @trce-why Serves as the single authoritative source of truth for table schemas and relational joins
-#  * @trce-how Constructs a structured named list of table metadata, column definitions, and foreign key relations
+#  * @trce-who Studio Teaching Layer / Error Registry Cache
+#  * @trce-what Retrieves cached error diagnosis patterns and remediation hints from the registry
+#  * @trce-where teach.R -> get_teach_errors | Upstream: explain_r_error | Downstream: load_registry
+#  * @trce-when On first error diagnosis per session; cached in TEACH_ERRORS thereafter
+#  * @trce-why Supplies plain-language error explanations across languages from externalized registry files
+#  * @trce-how Evaluates load_registry("errors", "r") on NULL, assigning to parent namespace cache
 #  */
-TEACH_ERRORS <- list(
-  list(pattern = "\\$ operator is invalid for atomic vectors",
-       plain = "You used $ on a vector, but $ only works on lists and data frames.",
-       causes = c("The variable holds an atomic vector (numeric, character, logical) rather than a data.frame or list.",
-                  "A function returned a vector or single column instead of a data frame.",
-                  "A column selection with [ ] simplified to a vector (use drop = FALSE)."),
-       fix = "Check class(x) to inspect the object. If x is a data frame, verify it was not reduced to a vector."),
-  list(pattern = "object '([^']+)' not found",
-       plain = "R looked for a name and found nothing bound to it.",
-       causes = c("The name is misspelled, or the capitalisation differs: R is case sensitive.",
-                  "It was created in an earlier session and is not in this one.",
-                  "It exists, but not where this code can see it: inside a function only arguments and outer scopes are visible."),
-       fix = "Check the spelling, run the code that creates it, or print ls() to see what does exist."),
-  list(pattern = "could not find function \"?([A-Za-z_.][A-Za-z0-9_.]*)\"?",
-       plain = "R does not know a function by that name.",
-       causes = c("The package it lives in is installed but not attached: no library() call has run.",
-                  "A typo, or a name from another language (len() is Python; R uses length()).",
-                  "A variable with the same name is shadowing the function."),
-       fix = "Add library(packageName) near the top, or type the name in the console without brackets to see what R has bound to it."),
-  list(pattern = "argument \"([^\"]+)\" is missing, with no default",
-       plain = "A function was called without an argument it needs.",
-       causes = c("The argument was left out.",
-                  "The argument name is misspelled, so R sees one unnamed argument and one missing."),
-       fix = "Check the signature with ?function_name: every argument without a default must be supplied."),
-  list(pattern = "unused argument",
-       plain = "An argument was passed that this function does not accept.",
-       causes = c("The name is misspelled, or it belongs to a different function.",
-                  "The function changed and no longer takes that argument."),
-       fix = "Compare the call with ?function_name -- argument names must match exactly."),
-  list(pattern = "non-numeric argument to (binary operator|mathematical function)",
-       plain = "R expected numbers and got text.",
-       causes = c("A column was read as text (read.csv() keeps anything that does not look numeric as text).",
-                  "A number arrived as a string: \"5\" is not 5.",
-                  "as.numeric() was applied to a factor and returned level numbers instead of values."),
-       fix = "Check the type with class(x) or str(x), then convert deliberately: as.numeric(as.character(x))."),
-  list(pattern = "subscript out of bounds",
-       plain = "Something was indexed at a position that does not exist.",
-       causes = c("The index is past the end of the vector or data frame.",
-                  "An empty result was indexed: x[1] where x has length 0.",
-                  "The data has fewer rows than the number in the code assumes."),
-       fix = "Print length(x) or nrow(df) first, and prefer seq_len(nrow(df)) to a fixed range."),
-  list(pattern = "replacement has ([0-9]+) rows, data has ([0-9]+)",
-       plain = "A column was assigned a vector of the wrong length.",
-       causes = c("The replacement is longer or shorter than the number of rows.",
-                  "One side was filtered and the other was not."),
-       fix = "Build the replacement from the same object, e.g. df$new <- df$existing * 2."),
-  list(pattern = "object of type 'closure' is not subsettable",
-       plain = "A function was used where data was expected.",
-       causes = c("A variable shares a name with a function this code calls (df, c, t and data are the usual culprits).",
-                  "A function's name was used as if it held the function's result."),
-       fix = "Rename the variable, or refer to the result of the call rather than the function itself."),
-  list(pattern = "the condition has length > 1",
-       plain = "if() was given a vector of TRUE/FALSE values but needs exactly one.",
-       causes = c("The condition compares a whole column rather than a single value.",
-                  "A filter or loop was intended, not a branch."),
-       fix = "Use any(condition), all(condition), or the vectorised ifelse()/filter instead."),
-  list(pattern = "missing value where TRUE/FALSE needed",
-       plain = "A condition evaluated to NA, so R could not decide which way to go.",
-       causes = c("A comparison involved NA: x == NA is NA, always.",
-                  "A column has missing values that were never handled."),
-       fix = "Test with is.na(x) and decide explicitly what missing values should do."),
-  list(pattern = "unexpected (symbol|'[^']*'|input|end of input)",
-       plain = "R could not finish reading this code: it is a syntax problem, not a runtime one.",
-       causes = c("A bracket or quote is not closed on this line, or on an earlier one.",
-                  "A comma is missing or extra inside a call.",
-                  "Lines were run separately that R needs to see together."),
-       fix = "Look at the line R quotes and one line above it: brackets pair up, and the error often points just past the real cause."),
-  list(pattern = "cannot open (the connection|file)",
-       plain = "R could not read or write the file you named.",
-       causes = c("The path is relative and the working directory is not what you expect: getwd() shows it.",
-                  "The file's name or case differs from what is on disk.",
-                  "The folder does not exist yet."),
-       fix = "Print getwd() and list.files(), then use the Files pane to set the directory."),
-  list(pattern = "there is no package called",
-       plain = "The package is not installed.",
-       causes = c("It was never installed on this machine.",
-                  "It is installed for a different R version or library path."),
-       fix = "Install it once with install.packages(\"name\"), then library(name).")
-)
+get_teach_errors <- function() {
+  if (is.null(TEACH_ERRORS)) {
+    TEACH_ERRORS <<- load_registry("errors", "r")
+  }
+  TEACH_ERRORS
+}
+
 
 # /**
 #  * @trce-id trce-teach-003
@@ -412,7 +317,7 @@ explain_r_error <- function(message) {
   message <- if (is.null(message)) "" else paste(message, collapse = " ")
   if (!nzchar(trimws(message))) return(NULL)
 
-  for (entry in TEACH_ERRORS) {
+  for (entry in get_teach_errors()) {
     if (grepl(entry$pattern, message, ignore.case = TRUE, perl = TRUE)) {
       return(list(plain = entry$plain, causes = entry$causes, fix = entry$fix, matched = TRUE))
     }

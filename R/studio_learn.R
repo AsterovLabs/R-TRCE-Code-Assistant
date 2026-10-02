@@ -39,9 +39,9 @@ studio_learn_pane_server <- function(input, output, session, state) {
     parsed <- state$parsed()
     if (is.null(parsed)) {
       return(div(class = "rtrce-empty",
-        div(class = "rtrce-empty-icon", "\u25B6"),
-        div(class = "rtrce-empty-title", "Nothing to explain yet"),
-        p(class = "rt-xs", "Once the document parses, this pane explains whatever line your cursor is on.")))
+        div(class = "rtrce-empty-icon", "\U0001F43E"),
+        div(class = "rtrce-empty-title", "Cassie is ready to guide"),
+        p(class = "rt-xs", "Once the document parses, Cassie explains whatever line your cursor rests on.")))
     }
 
     analysis <- state$analysis()
@@ -103,11 +103,11 @@ studio_learn_pane_server <- function(input, output, session, state) {
     tagList(
       div(style = "display:flex; align-items:center; gap:8px; margin-bottom:8px;",
         span(class = "rt-chip", sprintf("L%d", line)),
-        span(class = "rt-chip rt-chip-accent", "reading, not reporting")) ,
+        span(class = "rt-chip rt-chip-accent", "\U0001F43E Cassie's Guidance")),
 
       pre(class = "rtrce-code", style = "margin-bottom:10px;", explained$code),
 
-      section("What R does with this line",
+      section("Cassie's Notes: What R does with this line",
         p(class = "rt-sm", style = "margin:0;", explained$what),
         p(class = "rt-xs", style = "color: var(--rt-text-faint); margin:4px 0 0;", explained$statement$note)),
 

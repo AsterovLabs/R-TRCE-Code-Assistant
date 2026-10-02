@@ -112,6 +112,189 @@
     sendInput(entry.historyInput, { direction: direction, nonce: Date.now() }, "event");
   }
 
+  // --- Find & Replace Modal Bar ---------------------------------------------
+  var findDialog = null;
+
+  function ensureFindDialog(cm) {
+    if (findDialog) return findDialog;
+    var el = document.createElement("div");
+    el.className = "rtrce-find-bar";
+    el.style.cssText = "position: absolute; top: 8px; right: 16px; z-index: 100; " +
+      "background: var(--rt-mantle, #181825); border: 1px solid var(--rt-border-plain, #313244); " +
+      "padding: 8px 12px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); " +
+      "display: flex; gap: 8px; align-items: center; font-size: 13px;";
+
+    el.innerHTML =
+      '<input type="text" id="rtrce_find_query" placeholder="Find…" style="background:var(--rt-base,#1e1e2e); color:var(--rt-text,#cdd6f4); border:1px solid var(--rt-border-plain,#313244); padding:4px 8px; border-radius:4px; width:140px;" />' +
+      '<input type="text" id="rtrce_replace_query" placeholder="Replace…" style="background:var(--rt-base,#1e1e2e); color:var(--rt-text,#cdd6f4); border:1px solid var(--rt-border-plain,#313244); padding:4px 8px; border-radius:4px; width:140px;" />' +
+      '<button id="rtrce_find_prev" class="rtrce-btn btn-xs" title="Previous match">▲</button>' +
+      '<button id="rtrce_find_next" class="rtrce-btn btn-xs" title="Next match">▼</button>' +
+      '<button id="rtrce_replace_btn" class="rtrce-btn btn-xs">Replace</button>' +
+      '<button id="rtrce_replace_all_btn" class="rtrce-btn btn-xs">All</button>' +
+      '<button id="rtrce_find_close" class="rtrce-btn btn-xs" style="margin-left:4px;">✕</button>';
+
+    document.body.appendChild(el);
+    findDialog = el;
+
+    var findInput = el.querySelector("#rtrce_find_query");
+    var replaceInput = el.querySelector("#rtrce_replace_query");
+
+    function doFind(rev) {
+      var q = findInput.value;
+      if (!q || !activeCm) return;
+      var cur = activeCm.getCursor();
+      var cursor = activeCm.getSearchCursor(q, rev ? cur : { line: cur.line, ch: cur.ch + 1 });
+      if (!cursor.find(rev)) {
+        cursor = activeCm.getSearchCursor(q, rev ? { line: activeCm.lastLine() } : { line: 0, ch: 0 });
+        if (!cursor.find(rev)) return;
+      }
+      activeCm.setSelection(cursor.from(), cursor.to());
+      activeCm.scrollIntoView({ from: cursor.from(), to: cursor.to() }, 20);
+    }
+
+    el.querySelector("#rtrce_find_next").onclick = function () { doFind(false); };
+    el.querySelector("#rtrce_find_prev").onclick = function () { doFind(true); };
+    findInput.onkeydown = function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        doFind(e.shiftKey);
+      } else if (e.key === "Escape") {
+        findDialog.style.display = "none";
+        if (activeCm) activeCm.focus();
+      }
+    };
+
+    el.querySelector("#rtrce_replace_btn").onclick = function () {
+      if (!activeCm) return;
+      var sel = activeCm.getSelection();
+      var q = findInput.value;
+      var repl = replaceInput.value;
+      if (sel && sel.toLowerCase() === q.toLowerCase()) {
+        activeCm.replaceSelection(repl);
+      }
+      doFind(false);
+    };
+
+    el.querySelector("#rtrce_replace_all_btn").onclick = function () {
+      if (!activeCm) return;
+      var q = findInput.value;
+      var repl = replaceInput.value;
+      if (!q) return;
+      var cursor = activeCm.getSearchCursor(q);
+      activeCm.operation(function () {
+        while (cursor.findNext()) {
+          cursor.replace(repl);
+        }
+      });
+    };
+
+    el.querySelector("#rtrce_find_close").onclick = function () {
+      findDialog.style.display = "none";
+      if (activeCm) activeCm.focus();
+    };
+
+    return findDialog;
+  }
+
+  var activeCm = null;
+
+  function showFindReplace(cm, withReplace) {
+    activeCm = cm;
+    var dlg = ensureFindDialog(cm);
+    dlg.style.display = "flex";
+    var repl = dlg.querySelector("#rtrce_replace_query");
+    var replBtn = dlg.querySelector("#rtrce_replace_btn");
+    var replAll = dlg.querySelector("#rtrce_replace_all_btn");
+    if (withReplace) {
+      repl.style.display = "";
+      replBtn.style.display = "";
+      replAll.style.display = "";
+    } else {
+      repl.style.display = "none";
+      replBtn.style.display = "none";
+      replAll.style.display = "none";
+    }
+    var sel = cm.getSelection();
+    var findInput = dlg.querySelector("#rtrce_find_query");
+    if (sel && sel.indexOf("\n") === -1) findInput.value = sel;
+    findInput.focus();
+    findInput.select();
+  }
+
+  // --- Autocomplete / IntelliSense popup ------------------------------------
+  var autocompletePopup = null;
+  var activeAutocomplete = null;
+
+  function closeAutocomplete() {
+    if (autocompletePopup && autocompletePopup.parentNode) {
+      autocompletePopup.parentNode.removeChild(autocompletePopup);
+    }
+    autocompletePopup = null;
+    activeAutocomplete = null;
+  }
+
+  function triggerAutocomplete(id, cm) {
+    var cur = cm.getCursor();
+    var line = cm.getLine(cur.line);
+    var before = line.slice(0, cur.ch);
+    var match = before.match(/([A-Za-z0-9_.]+(\$[A-Za-z0-9_.]*)?)$/);
+    if (!match) return false;
+    var prefix = match[1];
+    var startCh = cur.ch - prefix.length;
+    sendInput("editor_complete_request", {
+      prefix: prefix,
+      line: cur.line,
+      startCh: startCh,
+      endCh: cur.ch,
+      id: id,
+      nonce: Date.now()
+    }, "event");
+    return true;
+  }
+
+  function handleTabAutocomplete(id, cm) {
+    if (autocompletePopup && activeAutocomplete) {
+      insertCompletion(activeAutocomplete.selectedIndex);
+      return true;
+    }
+    var cur = cm.getCursor();
+    var line = cm.getLine(cur.line);
+    var before = line.slice(0, cur.ch);
+    if (/^\s*$/.test(before)) return false;
+    if (/[A-Za-z0-9_.]$/.test(before)) {
+      return triggerAutocomplete(id, cm);
+    }
+    return false;
+  }
+
+  function insertCompletion(index) {
+    if (!activeAutocomplete) return;
+    var token = activeAutocomplete.tokens[index];
+    if (!token) return;
+    var cm = activeAutocomplete.cm;
+    cm.replaceRange(token, { line: activeAutocomplete.line, ch: activeAutocomplete.startCh }, { line: activeAutocomplete.line, ch: activeAutocomplete.endCh });
+    closeAutocomplete();
+    cm.focus();
+  }
+
+  function updateAutocompleteSelection(delta) {
+    if (!activeAutocomplete || !autocompletePopup) return;
+    var items = autocompletePopup.querySelectorAll(".rtrce-autocomplete-item");
+    if (!items || items.length === 0) return;
+    var newIdx = activeAutocomplete.selectedIndex + delta;
+    if (newIdx < 0) newIdx = items.length - 1;
+    if (newIdx >= items.length) newIdx = 0;
+    activeAutocomplete.selectedIndex = newIdx;
+    for (var i = 0; i < items.length; i++) {
+      if (i === newIdx) {
+        items[i].style.backgroundColor = "var(--rt-surface0, #313244)";
+        items[i].scrollIntoView({ block: "nearest" });
+      } else {
+        items[i].style.backgroundColor = "";
+      }
+    }
+  }
+
   function initEditor(textarea) {
     var id = textarea.id;
     if (editors[id] || !window.CodeMirror) return;
@@ -126,7 +309,16 @@
       "Ctrl-S": function () { sendInput("editor_save_request", Date.now(), "event"); },
       "Cmd-S": function () { sendInput("editor_save_request", Date.now(), "event"); },
       "Ctrl-/": "toggleComment",
-      "Cmd-/": "toggleComment"
+      "Cmd-/": "toggleComment",
+      "Ctrl-F": function (cm) { showFindReplace(cm, false); },
+      "Cmd-F": function (cm) { showFindReplace(cm, false); },
+      "Ctrl-H": function (cm) { showFindReplace(cm, true); },
+      "Cmd-Alt-F": function (cm) { showFindReplace(cm, true); },
+      "Ctrl-Space": function (cm) { triggerAutocomplete(id, cm); },
+      "Tab": function (cm) {
+        if (handleTabAutocomplete(id, cm)) return;
+        cm.execCommand("defaultTab");
+      }
     };
 
     if (consoleMode) {
@@ -184,6 +376,35 @@
           selection_length: cm.getSelection().length
         }, "input");
       });
+    });
+
+    cm.on("keydown", function (cmInstance, e) {
+      if (autocompletePopup && activeAutocomplete) {
+        if (e.keyCode === 38) {
+          e.preventDefault();
+          updateAutocompleteSelection(-1);
+          return;
+        } else if (e.keyCode === 40) {
+          e.preventDefault();
+          updateAutocompleteSelection(1);
+          return;
+        } else if (e.keyCode === 13 || e.keyCode === 9) {
+          e.preventDefault();
+          insertCompletion(activeAutocomplete.selectedIndex);
+          return;
+        } else if (e.keyCode === 27) {
+          e.preventDefault();
+          closeAutocomplete();
+          return;
+        }
+      }
+    });
+
+    cm.on("blur", function () {
+      window.setTimeout(function () {
+        if (!autocompletePopup) return;
+        closeAutocomplete();
+      }, 200);
     });
   }
 
@@ -275,6 +496,51 @@
           entry.cm.setGutterMarker(hint.line - 1, "rtrce-hints", el);
         });
       });
+    });
+
+    registerHandler("rtrce:showCompletions", function (msg) {
+      closeAutocomplete();
+      if (!msg || !msg.tokens || msg.tokens.length === 0) return;
+      var entry = editors[msg.target];
+      if (!entry) return;
+      var cm = entry.cm;
+
+      activeAutocomplete = {
+        id: msg.target,
+        cm: cm,
+        line: msg.line,
+        startCh: msg.startCh,
+        endCh: msg.endCh,
+        tokens: msg.tokens,
+        selectedIndex: 0
+      };
+
+      var coords = cm.charCoords({ line: msg.line, ch: msg.startCh }, "page");
+      var popup = document.createElement("div");
+      popup.className = "rtrce-autocomplete-menu";
+      popup.style.cssText = "position: absolute; left: " + coords.left + "px; top: " + (coords.bottom + 2) + "px; " +
+        "background: var(--rt-mantle, #181825); border: 1px solid var(--rt-border-plain, #313244); " +
+        "border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); max-height: 200px; overflow-y: auto; " +
+        "min-width: 180px; z-index: 2000; font-family: monospace; font-size: 12px; padding: 4px 0;";
+
+      msg.tokens.forEach(function (tok, idx) {
+        var item = document.createElement("div");
+        item.className = "rtrce-autocomplete-item";
+        item.style.cssText = "padding: 4px 10px; cursor: pointer; color: var(--rt-text, #cdd6f4); display: flex; justify-content: space-between; align-items: center;";
+        if (idx === 0) item.style.backgroundColor = "var(--rt-surface0, #313244)";
+
+        var isDollar = tok.indexOf("$") !== -1;
+        item.innerHTML = '<span>' + tok + '</span><span style="font-size:10px; opacity:0.6; margin-left:8px;">' + (isDollar ? 'col' : 'fn') + '</span>';
+
+        item.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          insertCompletion(idx);
+        });
+        popup.appendChild(item);
+      });
+
+      document.body.appendChild(popup);
+      autocompletePopup = popup;
     });
   }
 

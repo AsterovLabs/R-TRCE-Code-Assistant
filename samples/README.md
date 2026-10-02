@@ -11,6 +11,7 @@ R file first.
 | `03_statistics.R` | ANOVA variance decomposition and effect sizes | `rtrce explain samples/03_statistics.R` |
 | `04_cli_tool.R` | Subcommand router with `usage()` and an execution guard | `rtrce parse samples/04_cli_tool.R` |
 | `05_student_traps.R` | **Deliberately broken style** — nine classic beginner traps | `rtrce pitfalls samples/05_student_traps.R` |
+| `09_cassie_companion.R` | Companion Telemetry & Linear Model (Dedicated to Cassie 🐾) | `rtrce run samples/09_cassie_companion.R` |
 
 ## Where these appear
 
