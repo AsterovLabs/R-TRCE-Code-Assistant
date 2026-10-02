@@ -86,7 +86,7 @@ COMMANDS
     teach <file> [line]             Plain-language concept breakdown, or deep-dive on one line
 
   TOOLS
-    studio [dir] [--shiny] [port]   Open interactive Studio for a project (default port 8084)
+    studio [dir] [port]             Open native Desktop Studio (Monaco Editor & Asterov UI)
 
 ANNOTATE OPTIONS
   --inplace, -i                   Overwrite the target file(s) with annotated code
@@ -161,22 +161,20 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
   }
 
   if (cmd == "studio") {
-    is_shiny <- any(args %in% c("--shiny", "-s"))
     react_launcher <- file.path(script_dir, if (.Platform$OS.type == "windows") "start_react_studio.bat" else "start_react_studio.sh")
-    app_file <- file.path(script_dir, "app.R")
 
     # Check if a directory path was provided
-    dir_candidate <- args[!args %in% c("--react", "-r", "--shiny", "-s") & !grepl("^[0-9]+$", args)][1]
+    dir_candidate <- args[!args %in% c("--react", "-r", "--desktop", "-d") & !grepl("^[0-9]+$", args)][1]
     if (!is.na(dir_candidate) && dir.exists(dir_candidate)) {
       Sys.setenv(PROJECT_DIR = normalizePath(dir_candidate, winslash = "/"))
     }
 
-    port_candidate <- args[!args %in% c("--react", "-r", "--shiny", "-s") & grepl("^[0-9]+$", args)][1]
+    port_candidate <- args[!args %in% c("--react", "-r", "--desktop", "-d") & grepl("^[0-9]+$", args)][1]
     if (!is.na(port_candidate)) {
       Sys.setenv(PORT = port_candidate)
     }
 
-    if (!is_shiny && file.exists(react_launcher)) {
+    if (file.exists(react_launcher)) {
       if (.Platform$OS.type == "windows") {
         system2("cmd.exe", c("/c", shQuote(react_launcher)))
       } else {
@@ -185,12 +183,8 @@ main <- function(argv = commandArgs(trailingOnly = TRUE)) {
       quit(status = 0)
     }
 
-    if (!file.exists(app_file)) {
-      cat(sprintf("Error: app.R not found in '%s'\n", script_dir), file = stderr())
-      quit(status = 1)
-    }
-    source(app_file)
-    quit(status = 0)
+    cat(sprintf("Error: Studio launcher not found: '%s'\n", react_launcher), file = stderr())
+    quit(status = 1)
   }
 
   if (length(args) == 0) {
@@ -708,7 +702,7 @@ run_doctor <- function() {
   missing_req <- missing_packages(req)
   missing_opt <- missing_packages(opt)
   has_json    <- !("jsonlite" %in% missing_req)
-  has_shiny   <- !("shiny" %in% missing_req)
+  has_studio  <- file.exists(file.path(script_dir, if (.Platform$OS.type == "windows") "start_react_studio.bat" else "start_react_studio.sh"))
   r_ok        <- getRversion() >= "4.0.0"
 
   cat(sprintf("  R version:       %s%s\n", R.version.string,
@@ -717,15 +711,14 @@ run_doctor <- function() {
   cat(sprintf("  Script folder:   %s\n", script_dir))
   cat(sprintf("  JSON export:     %s\n",
               if (has_json) "OK (jsonlite available)" else "MISSING - 'export-traces' unavailable"))
-  cat(sprintf("  Web Studio:      %s\n",
-              if (has_shiny) "OK (shiny available)" else "MISSING - 'studio' unavailable"))
+  cat(sprintf("  Desktop Studio:  %s\n",
+              if (has_studio) "OK (launcher available)" else "MISSING - 'studio' launcher not found"))
   cat("  Core modules:    common.R, parser.R, analyzer.R, annotator.R, validator.R, explain.R, pedagogy.R, runtime.R, teach.R [LOADED]\n")
   cat(sprintf("  Required:        %s   (manifest: R/common.R)\n", paste(req, collapse = ", ")))
   if (length(opt) > 0) {
     cat(sprintf("  Optional:        %s%s\n", paste(opt, collapse = ", "),
                 if (length(missing_opt) == 0) "" else
-                  sprintf("   [absent: %s - the Studio falls back to plain tables]",
-                          paste(missing_opt, collapse = ", "))))
+                  sprintf("   [absent: %s]", paste(missing_opt, collapse = ", "))))
   }
   cat("--------------------------------------------------------------------------------\n")
   cat("  Running self-tests...\n")

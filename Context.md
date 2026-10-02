@@ -11,38 +11,32 @@ R-TRCE Code Assistant/
 ├── AGENTS.md               # Agent instruction set, architecture invariants & rules
 ├── Context.md              # Trace index and architectural mapping (this file)
 ├── README.md               # User guide, quickstart, CLI reference, glossary
-├── r_trce.R                # CLI executable router (parse, explain, tutor, pitfalls, quiz, annotate, check, export, studio, doctor)
-├── app.R                   # Interactive Shiny studio
+├── r_trce.R                # CLI executable router (parse, explain, tutor, pitfalls, quiz, teach, annotate, check, export, studio, doctor)
 ├── install.sh              # Linux/macOS auto-installer (creates `rtrce` + `rtrce-studio`)
 ├── install.ps1 / .bat      # Windows auto-installer (creates `rtrce.cmd` + `rtrce-studio.cmd`)
-├── start_studio.sh / .bat  # Studio launchers
+├── start_studio.sh / .bat  # Studio launchers (delegates to start_react_studio)
+├── start_react_studio.sh / .bat # Direct native desktop IDE launchers
+├── studio/                 # Native Desktop Studio
+│   ├── client/             # React 18 + Monaco Editor workbench + Asterov Catppuccin theme
+│   └── server/             # Electron shell (electron-main.js), Express/WS daemon & r_worker.R
 ├── R/
 │   ├── common.R            # Shared helpers: %||%, or_default(), get_script_dir(), annotatable-component
 │   │                       # rule, trace-ID bookkeeping, encoding-tolerant file reading, and the
-│   │                       # dependency manifest (required_packages / optional_packages)  [SOURCED FIRST]
+│   │                       # dependency manifest (required_packages)  [SOURCED FIRST]
 │   ├── parser.R            # Core AST parsing and token extraction
 │   ├── analyzer.R          # Semantic analyzer and archetype recognition
 │   ├── annotator.R         # TRCE 6-point annotation generator and code injector
 │   ├── validator.R         # Trace integrity and coverage auditing
 │   ├── explain.R           # Plain text/Markdown explanation and JSON export
 │   ├── pedagogy.R          # Student tutor, pitfall sentinel, pipe/formula deconstruction & quizzes
+│   ├── teach.R             # Line-by-line explanation, error decoder, concept tagger
 │   ├── runtime.R           # Live R session: evaluation, console capture, workspace and plots
-│   ├── editor_ops.R        # Editable-document logic: statement at a cursor, line counting, console history
-│   ├── studio_editor.R     # Studio pane: source editor bound to the working document (+ Run / Save)
-│   ├── studio_console.R    # Studio pane: interactive console, transcript and session controls
-│   └── studio_panes.R      # Studio panes: Files, Plots, Packages, Help + title bar and status bar chrome
-├── www/                    # Vendored browser assets served by Shiny
-│   ├── rtrce-theme.css     # The whole visual language: tokens (Catppuccin Mocha/Latte + Asterov gradient), shell, panes
-│   ├── rtrce-editor.js     # CodeMirror <-> Shiny bridge (edit, run, history, gutter hints)
-│   ├── rtrce-layout.js     # IDE shell behaviour: splitters, theme switch, shortcut sheet
-│   ├── brand/              # The Asterov "A" monogram + favicon, copied from the design system
-│   └── codemirror/         # CodeMirror 5.65.16 + R mode + addons (MIT; see its LICENSE)
+│   └── editor_ops.R        # IDE-style decisions: statement at a cursor, line counting, console history
+├── www/
+│   ├── brand/              # Asterov monogram, icons, and logo assets
+│   └── rtrce-theme.css     # Asterov design system tokens (Catppuccin Mocha/Latte + signature gradient)
 └── tests/
     └── test_r_trce.R       # Automated test suite running against synthetic and real R scripts
-
-Note: the Studio offers example scripts discovered from (in priority order) a sibling
-"R Test" checkout, ./samples, ~/.r-trce-code-assistant/samples, then ~/.r-trce/samples.
-Every root is optional.
 ```
 
 ---
@@ -67,16 +61,18 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-rparse-007` | R-TRCE Code Assistant Engine / Validator Subsystem | Validates TRCE annotations for canonical pattern compliance, 6-field completeness, and coverage | `R/validator.R` (`validate_r_annotations`) |
 | `trce-rparse-008` | R-TRCE Code Assistant Engine / Architectural Explainer | Generates plain-text and Markdown architectural explanations and TRCE context mappings for R files | `R/explain.R` (`explain_r_file`, `format_markdown_explanation`, `export_trace_json`) |
 | `trce-rparse-009` | User / CLI Operator / Automated Agent | Main CLI command router and option parser for the R-TRCE Code Assistant toolchain | `r_trce.R` (`main`) |
-| `trce-rparse-010` | Shiny Web Browser Client / Developer | Interactive Shiny UI and Server studio for AST inspection, architecture explanation, and TRCE annotation | `app.R` (`ui`, `server`) |
+| `trce-rparse-010` | *(Historical)* Legacy Web Studio | Retired Shiny web interface (superseded by native Electron React Studio) | `studio/` |
 | `trce-rparse-011` | Test Suite Runner / CI Verifier | Automated test harness verifying AST parsing, semantic analysis, annotation injection, and trace validation | `tests/test_r_trce.R` (`run_all_tests`) |
 | `trce-rparse-012` | R-TRCE Code Assistant Engine / Parser Subsystem | Maps AST expressions to line boundaries and associates preceding comment scaffolding | `R/parser.R` (`extract_top_expressions`) |
 | `trce-rparse-013` | R-TRCE Code Assistant Engine / Pedagogical & Educational Subsystem | Deconstructs R ASTs into beginner-friendly explanations, audits student pitfalls, visualizes pipelines/formulas, and synthesizes quizzes | `R/pedagogy.R` (`detect_student_pitfalls`, `deconstruct_pipes`, `deconstruct_formulas`, `generate_student_explanation`, `generate_student_quiz`) |
 | `trce-rparse-014` | R-TRCE Code Assistant Engine / Shared Infrastructure | Provides the canonical shared helpers used by every entry point: `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest, and encoding-tolerant source reading | `R/common.R` (`%||%`, `get_script_dir`, `is_annotatable_component`, `select_annotatable_components`, `max_existing_trace_number`, `read_source_lines`, `required_packages`, `missing_packages`) |
 | `trce-rparse-015` | R-TRCE Code Assistant Engine / Live Session Runtime | Evaluates user-submitted R code in a persistent environment and captures the console transcript, value types, warnings, errors and rendered plots | `R/runtime.R` (`new_r_session`, `session_evaluate`, `evaluate_with_capture`) |
 | `trce-rparse-016` | R-TRCE Code Assistant Engine / Editor Operations | Resolves the code a "run this" gesture should execute and walks console history, without depending on shiny or the browser | `R/editor_ops.R` (`statement_code_at`, `history_step`, `count_lines`) |
-| `trce-rparse-017` | R-TRCE Code Assistant Studio / Source Editor Pane | Two-way binding between the browser editor and the Studio's working document, plus Run / Run All / Save | `R/studio_editor.R` (`studio_editor_ui`, `studio_editor_server`) |
-| `trce-rparse-018` | R-TRCE Code Assistant Studio / Console Pane | Interactive R console sharing the editor's live session, with command history, transcript and environment reporting | `R/studio_console.R` (`studio_console_ui`, `studio_console_server`) |
-| `trce-rparse-019` | R-TRCE Code Assistant Studio / Workspace Panes | Files, Plots, Packages and Help panes plus the title-bar and status-bar chrome | `R/studio_panes.R` (`studio_files_pane_server`, `studio_plots_pane_server`, `studio_packages_pane_server`, `studio_help_pane_server`, `studio_chrome_server`) |
+| `trce-rparse-017` | *(Historical)* Legacy CodeMirror Editor Pane | Retired Shiny CodeMirror pane | `studio/client/` |
+| `trce-rparse-018` | *(Historical)* Legacy Console Pane | Retired Shiny console pane | `studio/client/` |
+| `trce-rparse-019` | *(Historical)* Legacy Workspace Panes | Retired Shiny rail panes | `studio/client/` |
+| `trce-rparse-020` | R-TRCE Code Assistant Engine / Teaching Subsystem | Line-by-line explanation, runtime error decoder, and pedagogical concept tagging | `R/teach.R` (`explain_code_line`, `explain_r_error`) |
+| `trce-rparse-021` | *(Historical)* Legacy Learn Pane | Retired Shiny learn pane | `studio/client/` |
 | `trce-rparse-022` | R-TRCE Code Assistant Engine / Headless Worker Daemon | Long-running persistent R process executing AST analysis and live session commands over a stdio JSON-RPC bridge | `studio/server/r_worker.R` (`worker_main`) |
 
 ### 2.2 Component-level Trace Index
@@ -91,27 +87,9 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-cli-001` | `usage()` | cli_dispatcher | `r_trce.R` (L54-L112) |
 | `trce-cli-002` | `run_doctor()` | utility_function | `r_trce.R` (L402-L480) |
 | `trce-cli-003` | `interactive_guard()` | cli_entrypoint | `r_trce.R` (L491-L493) |
-| `trce-studio-001` | `discover_sample_files()` | utility_function | `app.R` (L206-L227) |
-| `trce-studio-002` | `ui()` | shiny_ui | `app.R` (L272-L518) |
-| `trce-studio-003` | `server()` | shiny_server | `app.R` (L530-L1367) |
-| `trce-studio-004` | `interactive_guard()` | cli_entrypoint | `app.R` (L1381-L1434) |
-| `trce-studio-005` | `studio_bind_host()` | utility_function | `app.R` (L116-L125) |
-| `trce-studio-006` | `register_studio_assets()` | utility_function | `app.R` (L146-L153) |
-| `trce-studio-007` | `studio_asset_version()` | utility_function | `app.R` (L173-L182) |
-| `trce-pane-001` | `studio_files_pane_server()` | shiny_server | `R/studio_panes.R` (L54-L172) |
-| `trce-pane-002` | `studio_row_click()` | utility_function | `R/studio_panes.R` (L189-L192) |
-| `trce-pane-003` | `studio_plots_pane_server()` | shiny_server | `R/studio_panes.R` (L237-L300) |
-| `trce-pane-004` | `studio_packages_pane_server()` | shiny_server | `R/studio_panes.R` (L319-L401) |
-| `trce-pane-005` | `studio_help_pane_server()` | shiny_server | `R/studio_panes.R` (L418-L473) |
-| `trce-pane-006` | `studio_chrome_server()` | shiny_server | `R/studio_panes.R` (L493-L534) |
-| `trce-pane-007` | `human_size()` | utility_function | `R/studio_panes.R` (L208-L218) |
 | `trce-editor-001` | `statement_code_at()` | utility_function | `R/editor_ops.R` (L56-L100) |
 | `trce-editor-002` | `history_step()` | utility_function | `R/editor_ops.R` (L148-L173) |
 | `trce-editor-003` | `count_lines()` | utility_function | `R/editor_ops.R` (L121-L126) |
-| `trce-ui-editor-001` | `studio_editor_ui()` | shiny_ui | `R/studio_editor.R` (L45-L90) |
-| `trce-ui-editor-002` | `studio_editor_server()` | shiny_server | `R/studio_editor.R` (L112-L220) |
-| `trce-ui-console-001` | `studio_console_ui()` | shiny_ui | `R/studio_console.R` (L46-L90) |
-| `trce-ui-console-002` | `studio_console_server()` | shiny_server | `R/studio_console.R` (L110-L185) |
 | `trce-common-001` | `or_default()` | utility_function | `R/common.R` (L52-L56) |
 | `trce-common-002` | `get_script_dir()` | cli_dispatcher | `R/common.R` (L74-L82) |
 | `trce-common-003` | `is_annotatable_component()` | utility_function | `R/common.R` (L103-L106) |

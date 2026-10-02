@@ -227,7 +227,7 @@ if [ ! -f "$INSTALL_DIR/r_trce.R" ]; then
   exit 1
 fi
 
-# 4. Check & Install Required R Packages (jsonlite, shiny)
+# 4. Check & Install Required R Packages (manifest: R/common.R)
 if [ -x "$RSCRIPT_BIN" ] || command -v "$RSCRIPT_BIN" >/dev/null 2>&1; then
   echo -n "Checking required R packages (manifest: R/common.R)... "
   # The list itself lives in required_packages() in R/common.R, so this
@@ -254,7 +254,7 @@ if [ -x "$RSCRIPT_BIN" ] || command -v "$RSCRIPT_BIN" >/dev/null 2>&1; then
       install.packages(pkgs, lib = user_lib, repos = 'https://cloud.r-project.org', quiet = FALSE)
     " || {
       echo -e "${YELLOW}[!] Note: If compiling from CRAN failed, you can install precompiled binaries on Debian/Ubuntu/Chromebook with:${NC}"
-      echo -e "    ${BOLD}sudo apt update && sudo apt install -y r-cran-shiny r-cran-jsonlite${NC}"
+      echo -e "    ${BOLD}sudo apt update && sudo apt install -y r-cran-jsonlite${NC}"
     }
 
     # Verify if installed now (same manifest, so this cannot check a stale list)
@@ -403,8 +403,7 @@ echo -e "  ${BOLD}rtrce pitfalls script.R${NC}     Quick beginner pitfall sentin
 echo -e "  ${BOLD}rtrce quiz script.R${NC}         Generate student comprehension quiz"
 echo -e "  ${BOLD}rtrce explain script.R${NC}      Full architectural explanation"
 echo -e "  ${BOLD}rtrce help${NC}                  Every command and option"
-echo -e "  ${BOLD}rtrce-studio${NC}                Launch interactive Studio (defaults to React Local IDE)"
-echo -e "  ${BOLD}rtrce-studio --shiny${NC}        Launch interactive Shiny web studio explicitly"
+echo -e "  ${BOLD}rtrce-studio${NC}                Launch R-TRCE Studio Native Desktop IDE"
 echo ""
 echo -e "${YELLOW}Note:${NC} the older names 'r-trce' and 'r-trce-studio' still work as aliases."
 echo ""

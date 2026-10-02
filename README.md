@@ -53,14 +53,16 @@ Not sure what "archetype" or "coverage %" mean? See the [Glossary](#glossary).
   - **Data Pipeline Flow Inspector:** Deconstructs multi-stage native (`|>`) and magrittr (`%>%`) pipelines into discrete, human-readable steps.
   - **Statistical Formula Deconstructor:** Translates model formulas (`y ~ x1 + x2 * x3`) into clear statistical explanations of response variables, predictors, and interaction terms.
   - **Comprehension Quiz Generator:** Generates automated self-study multiple-choice questions directly from user code.
-* **Non-Destructive Code Injection:** Automatically injects annotations into R source files while preserving existing formatting, author comments, and indentation.
-* **Live Session & Editor:** The Studio (and `rtrce run`) can actually execute R: an editable
-  CodeMirror pane with `Ctrl+Enter` statement execution, a console sharing the same session,
-  captured plots, and an environment table — all with **no extra R package**. The editor ships
-  vendored ([CodeMirror](https://codemirror.net) 5.65.16, MIT, see `www/codemirror/LICENSE`) so
-  it works offline.
+* **Native Desktop Studio IDE:** A dedicated desktop application powered by Electron, React, and Monaco Editor. Features include:
+  - Statement-at-a-time and whole-file execution (`Ctrl+Enter` / `Run`)
+  - Live console transcript with syntax highlighting
+  - Environment object inspector and tabular data viewer
+  - Captured plot gallery with instant preview
+  - Interactive AST component inspector, TRCE doc-comment generator, and diff viewer
+  - Student walkthrough with Cassie, concept decoder, pitfall warnings, and comprehension quizzes
+  - Asterov Catppuccin design tokens (Mocha dark & Latte light)
 * **Integrity Audit & Coverage:** Audits existing or generated annotations, verifies field completeness, flags duplicate IDs, and reports coverage percentages.
-* **Dual Interfaces:** Provides both a Unix-philosophy command-line tool (`r_trce.R`) and an interactive Shiny web dashboard (`app.R` with dedicated 🎓 Student Studio).
+* **Unified Toolchain:** Provides both a Unix-philosophy command-line tool (`rtrce`) and the standalone native Desktop Studio (`rtrce-studio`).
 
 ---
 
@@ -86,15 +88,15 @@ irm https://raw.githubusercontent.com/AsterovLabs/R-TRCE-Code-Assistant/main/ins
 
 ### 📦 Standalone & Offline Downloads (GitHub Releases)
 
-Pre-packaged bundles are published on the **[GitHub Releases](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases)** page. They come pre-built and ready to run with **both** local studios:
+Pre-packaged bundles are published on the **[GitHub Releases](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases)** page. They come pre-built with bundled Electron runtimes — no Node.js or browser required:
 
 | Operating System | Package Archive | Quick Launch (Zero Setup) |
 | :--- | :--- | :--- |
-| **🪟 Windows 11 / 10** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Unzip the download.<br>**2.** Double-click **`start_react_studio.bat`** (React Studio) or **`start_studio.bat`** (Shiny Studio). |
+| **🪟 Windows 11 / 10** | [`rtrce-code-assistant-windows-all.zip`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Unzip the download.<br>**2.** Double-click **`start_react_studio.bat`** (or `start_studio.bat`). |
 | **🐧 Linux (All Distros)** | [`rtrce-code-assistant-linux-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Extract: `tar -xzf rtrce-code-assistant-linux-all.tar.gz`<br>**2.** Run: `./start_react_studio.sh` (or `./start_studio.sh`). |
 | **🍏 macOS** | [`rtrce-code-assistant-macos-all.tar.gz`](https://github.com/AsterovLabs/R-TRCE-Code-Assistant/releases/latest) | **1.** Extract archive.<br>**2.** Run: `./start_react_studio.sh` (or `./start_studio.sh`). |
 
-*(Optional)* You can also run `install.bat` on Windows or `./install.sh` on Linux to add `rtrce`, `rtrce-react-studio`, and `rtrce-studio` permanently to your system `PATH`.
+*(Optional)* You can also run `install.bat` on Windows or `./install.sh` on Linux to add `rtrce` and `rtrce-studio` permanently to your system `PATH`.
 
 ---
 
@@ -107,12 +109,7 @@ R version >= 4.0.0 is required. If using the Asterov user environment:
 Rscript --version
 ```
 
-The tool needs two R packages: **`jsonlite`** (JSON trace export) and **`shiny`** (the Studio).
-They are declared once, in `required_packages()` in
-[`R/common.R`](R/common.R), and `rtrce doctor` plus both installers read that manifest — so the
-three of them can never disagree about what "required" means. **`DT`** is listed as *optional*
-by `optional_packages()`: when it is present the Studio renders richer tables, and when it is
-absent it falls back to R's built-in tables. The Asterov `~/.r-env` ships all three.
+The tool requires only one external R package: **`jsonlite`** (for AST telemetry, pedagogical registries, and JSON trace export). It is declared in `required_packages()` in [`R/common.R`](R/common.R), and `rtrce doctor` plus both installers read that manifest — so they can never disagree about what "required" means. Base R provides all other AST parsing, execution, and plotting capabilities.
 
 ---
 
@@ -199,56 +196,33 @@ console on the left, a rail of workspace panes on the right, a title bar that te
 file you are in and a status bar that tells you where you are:
 
 ```
-┌───────────────────────────────────────────────┬─────────────────────────┐
-│ Ⓐ R-TRCE Studio      doc.R · 24 lines   ◐ ?   │                         │
-├───────────────────────────────────────────────┤  Environment  Files     │
-│ SOURCE  (Ctrl+Enter runs the statement)       │  Plots  Packages  Help  │
-│                                               │                         │
-├───────────────────────────────────────────────┤  The panes you work in: │
-│ Console │ Project │ Walkthrough │ Annotated … │  live objects, folders  │
-│ > _                                           │  plots, packages, help  │
-└───────────────────────────────────────────────┴─────────────────────────┘
-   working dir · Ln 12 · 3 objects · TRCE 100% · R 4.5.3
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Ⓐ R-TRCE Studio (Native Desktop)   doc.R · Ln 12, Col 4      ◐   ⚙   ✖ │
+├───────────────────────────────────────────────┬─────────────────────────┤
+│ MONACO CODE EDITOR                            │ EXPLORER & WORKSPACE    │
+│ (Ctrl+Enter runs statement, Ctrl+S saves)     │ ├── Files (samples/)    │
+│                                               │ ├── Environment (vars)  │
+│                                               │ ├── Plots Gallery       │
+│                                               │ └── Telemetry Badges    │
+├───────────────────────────────────────────────┴─────────────────────────┤
+│ WORKBENCH TABS:                                                         │
+│ [Console / REPL] [AST & Archetype] [TRCE Badges] [Cassie Tutor] [Quiz]  │
+│ >                                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+   Working: /home/sam/project · Objects: 4 · Coverage: 100% · R 4.5.2
 ```
 
-* **Source pane:** R syntax highlighting, line numbers, bracket matching, `Ctrl+Enter` to run the
-  statement at the cursor (the whole statement, as RStudio does), `Ctrl+Shift+Enter` for the file,
-  `Ctrl+S` to save back to the file you opened, `Ctrl+/` to comment.
-* **Console:** shares the session with the editor, so a function you define with `Ctrl+Enter` is
-  available at the prompt and vice versa. `Enter` submits, `Shift+Enter` adds a line, `Up`/`Down`
-  recall history. Values, `cat()` output, messages, warnings and errors each get their own colour.
-* **Environment:** every object with its type, class, size and a value preview, refreshed after
-  each run.
-* **Files:** browse, open a text file straight into the editor, and set the session working
-  directory so `read.csv("data/x.csv")` resolves the way you expect.
-* **Plots:** the newest plot you drew, with its history and a full-size link.
-* **Packages:** what is installed, what this document imports, and what this tool requires.
-* **Help:** shortcuts, the TRCE six questions, and the vocabulary the interface uses.
-* **Bottom panel tabs:** `Project` (open files, annotation settings, batch annotate),
-  `Guided Walkthrough`, `Annotated Code & Traces`, `Architectural Explanation`, `AST & Parse
-  Tokens` and `🎓 Student Studio` — all reading the same document you are editing.
-* **Drag the splitters** to size the panes; double-click one to reset. **`?`** opens the shortcut
-  sheet. **◐** switches between the dark (Mocha) and light (Latte) theme, and remembers your
-  choice.
+* **Monaco Source Editor:** Full VS Code editor engine with syntax highlighting, line numbers, bracket matching, `Ctrl+Enter` to run the statement at the cursor, `Ctrl+Shift+Enter` to run the file, `Ctrl+S` to save, and multi-cursor support.
+* **Interactive Console & REPL:** Evaluates code directly against the background R worker daemon (`r_worker.R`). Preserves variables, captures stdout/stderr, and renders formatted values.
+* **Workspace & Environment Inspector:** Every object with its type, class, size, and value preview, refreshed dynamically.
+* **Captured Plots Gallery:** Visualizes generated PNG plots with instant zoom, full-resolution inspection, and history.
+* **AST Component & TRCE Telemetry Explorer:** Inspects classified functions, pipelines, models, and schemas with live 6-point TRCE annotations and side-by-side diffs.
+* **🎓 Student Walkthrough with Cassie:** Line-by-line pedagogical breakdown, pitfall sentinel alerts, and automated multiple-choice quiz generator.
+* **Asterov Design Language:** Styled with Asterov Catppuccin tokens (Mocha dark & Latte light) and the mauve/blue/teal signature gradient.
 
-The look follows the Asterov "A" monogram: Catppuccin surfaces with the mark's
-mauve → blue → teal gradient used as an accent. Every colour lives in
-[`www/rtrce-theme.css`](www/rtrce-theme.css) as a token, in both themes.
+### Studio Execution & Security
 
-
-### Running code in the browser: what to know
-
-The Studio executes R, which is the point — and also why it listens on **localhost only** by
-default. To reach it from another machine (a Chromebook's browser, a container host) opt in:
-
-```bash
-RTRCE_ALLOW_REMOTE=1 ./start_studio.sh      # prints a warning, shows a red banner in the UI
-HOST=127.0.0.1 ./start_studio.sh            # force loopback explicitly
-```
-
-Runaway code is stopped by a per-evaluation time limit (10 s by default), `quit()` is blocked so
-a script cannot end the session, and a file that starts a Shiny server by printing it reports
-that instead of hanging the Studio.
+The Studio runs on your local machine and executes code locally via loopback. Runaway code is stopped by a per-expression time limit (10s default), `quit()`/`q()` are guarded so scripts cannot terminate the session host, and execution stays responsive without freezing the IDE UI.
 
 
 No R file handy? The sidebar's **"Or load an example script"** dropdown lists the scripts in

@@ -8,47 +8,42 @@ R-TRCE Code Assistant is an architectural analysis, AST comprehension, and TRCE 
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| CLI Entrypoint | `r_trce.R` | Subcommand router (`parse`, `explain`, `tutor`, `pitfalls`, `quiz`, `annotate`, `check`, `export-traces`, `studio`, `doctor`) |
-| Interactive Studio | `app.R` | Shiny webapp for visual AST inspection, dependency graphs, and live annotation |
-| Editor Pane | `R/studio_editor.R` | CodeMirror source editor bound to the working document, with Run / Run All / Save and cursor reporting |
-| Console Pane | `R/studio_console.R` | Interactive R console sharing the editor's session: transcript, history, restart |
-| Editor Operations | `R/editor_ops.R` | The IDE-style decisions kept shiny-free and testable: statement at a cursor, editor line counting, history stepping |
-| Browser Assets | `www/` | Vendored CodeMirror 5.65.16 (MIT) + `rtrce-editor.js`, the Shiny bridge. No CDN, no extra R package |
-| Theme | `www/rtrce-theme.css` | **The only place a colour is named.** Asterov design tokens (Catppuccin Mocha/Latte + the "A" icon's gradient), shell, panes, controls |
-| Rail Panes | `R/studio_panes.R` | Files, Plots, Packages and Help, plus the title-bar document chip and the status bar |
-| Shell Behaviour | `www/rtrce-layout.js` | Splitters, theme switch, editor re-measure, keyboard-shortcut sheet |
+| CLI Entrypoint | `r_trce.R` | Subcommand router (`parse`, `explain`, `tutor`, `pitfalls`, `quiz`, `teach`, `annotate`, `check`, `export-traces`, `studio`, `doctor`) |
+| Native Desktop Studio Shell | `studio/server/electron-main.js` | Electron desktop container, native menus, single-instance lock, no-sandbox configuration |
+| Studio Backend Daemon | `studio/server/index.js` | Express & WebSocket daemon providing file I/O, dialog bridges, terminal runners, and worker process lifecycle |
+| Studio Headless R Worker | `studio/server/r_worker.R` | Persistent R background process communicating over JSON-RPC stdio for sub-10ms AST analysis, TRCE synthesis, and live execution |
+| Studio React Workbench | `studio/client/` | React 18 + Monaco Editor workbench with Asterov Catppuccin theme, interactive REPL, AST & telemetry badges, and Cassie tutor |
 | **Shared Helpers** | **`R/common.R`** | **Sourced first by every entry point. Owns `%||%`, `or_default()`, `get_script_dir()`, the annotatable-component rule, trace-ID bookkeeping, the dependency manifest (`required_packages()`, `optional_packages()`, `missing_packages()`) and encoding-tolerant file reading. Never duplicate any of these elsewhere.** |
 | Core AST Parser | `R/parser.R` | AST extraction, token mapping, and comment association using base R `parse()` & `getParseData()` |
-| Semantic Analyzer | `R/analyzer.R` | Archetype detection (Shiny UI/server, snowflake schemas, ANOVA models, CLI runners), call graph |
+| Semantic Analyzer | `R/analyzer.R` | Archetype detection (CLI tools, Shiny reactive graphs, snowflake schemas, ANOVA models), call graph |
 | Annotation Synthesizer | `R/annotator.R` | 6-point TRCE metadata formulation and non-destructive code injection engine |
 | Trace Validator | `R/validator.R` | Audits pattern compliance (`^trce-[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]+$`), 6-field completeness, and coverage |
 | Explainer & Exporter | `R/explain.R` | Generates plain text/Markdown architectural narratives and TRCE JSON export |
 | Pedagogical Subsystem | `R/pedagogy.R` | Student tutor, pitfall sentinel, pipe/formula deconstruction & comprehension quizzes |
-| **Live Session Runtime** | **`R/runtime.R`** | **Shiny-free R session: evaluates submitted code, captures console output/messages/warnings/errors, reports workspace objects, and stores plots. Drives both the Studio console and `rtrce run`.** |
+| Teaching Engine | `R/teach.R` | Line-by-line explanation, error decoder, concept tagger, and pedagogical telemetry |
+| **Live Session Runtime** | **`R/runtime.R`** | **Dependency-free R session: evaluates submitted code, captures console output/messages/warnings/errors, reports workspace objects, and stores plots. Drives both the Studio daemon and `rtrce run`.** |
+| Editor Operations | `R/editor_ops.R` | IDE decisions kept testable: statement at a cursor, line counting, console history |
 | Bundled Examples | `samples/` | Five example scripts: one per detected archetype plus a deliberate "student traps" file that exercises all nine pitfall detectors |
 | Automated Test Suite | `tests/test_r_trce.R` | Functional verification across synthetic cases, the bundled samples, and the real-world R Test corpus |
 
-**Language Environment:** R (version >= 4.0.0, default: `Rscript`).
-**External Dependencies:** Standard R library + `jsonlite`, `shiny` (for `app.R` studio).
+**Language Environment:** R (version >= 4.0.0, default: `Rscript`), Node.js (version >= 18 for Studio build), Electron 44+.
+**External R Dependencies:** Standard R library + `jsonlite`.
 
 ### 1.1 Invariants agents must preserve
 
 1. **One annotatable-component rule.** `is_annotatable_component()` / `select_annotatable_components()` in `R/common.R` are the only definitions. The CLI, validator, annotator and Studio all call them, which is what keeps reported coverage identical across interfaces.
 2. **Trace IDs are never reused.** `max_existing_trace_number()` seeds the annotator counter so a partly annotated file continues numbering instead of colliding.
-3. **`%||%` and `or_default()` are defined locally.** `%||%` only exists in base R from 4.4.0, but the supported floor is 4.0.0. Use `or_default()` for Shiny text inputs so a cleared field falls back instead of emitting an empty annotation field.
+3. **`%||%` and `or_default()` are defined locally.** `%||%` only exists in base R from 4.4.0, but the supported floor is 4.0.0. Use `or_default()` for text inputs so a cleared field falls back instead of emitting an empty annotation field.
 4. **Read source through `read_source_lines()`.** It normalises CRLF and re-encodes legacy (cp1252 / Latin-1) files, which otherwise fail with `input string 1 is invalid UTF-8`.
-5. **Failures are surfaced, never swallowed.** `parse_r_file()` raises on syntax errors; `app.R` catches that into `load_error()` and renders a banner, rather than returning NULL and leaving blank tabs.
+5. **Failures are surfaced, never swallowed.** `parse_r_file()` raises on syntax errors with explicit line and column information.
 6. **Annotation is non-destructive.** Only new comment blocks are inserted; existing lines are never edited.
 7. **Two trace-ID namespaces.** `trce-rparse-NNN` is the frozen module-level namespace (§2.1 of `Context.md`) and must never be renumbered. Component-level blocks use one namespace per module, `trce-<module>-NNN`, which keeps IDs unique repository-wide. When annotating a source file of this project, pass `--prefix trce-<module> --no-header`.
 8. **This repository is 100% self-covered.** `tests/test_r_trce.R` asserts that every source file reports 100% coverage and that every in-source trace ID is indexed in `Context.md` and globally unique. If you add a component, run `rtrce annotate <file> --inplace --no-header --prefix trce-<module>` and update `Context.md` in the same commit.
 9. **Never report a pattern found inside a comment.** The Pitfall Sentinel and the ID extractors skip comment lines; keep it that way so teaching notes are never flagged as defects.
 10. **One dependency manifest.** `required_packages()`, `optional_packages()` and `missing_packages()` in `R/common.R` are the only definitions. `rtrce doctor`, `install.sh` and `install.ps1` read them instead of carrying private lists, and `tests/test_r_trce.R` fails if either installer hard-codes a package list again. Add a package by editing that manifest, never by editing an installer.
-11. **The session engine is Shiny-free.** `R/runtime.R` must never `library(shiny)` or reach into reactive state. The Studio console and `rtrce run` both call `session_evaluate()`, so a behaviour change in one is a behaviour change in the other — and the test suite can verify it without a browser.
-12. **A hosted session may never kill or block its host.** `R/runtime.R` guards `quit()`/`q()` and refuses to print a `shiny.appobj`. Anything else that could terminate or indefinitely block the Studio process (starting a server, waiting on input) belongs behind the same kind of guard, with an explanation the user can read.
-13. **The Studio binds to localhost by default.** It executes arbitrary R code, so remote access must be explicit (`HOST=...` or `RTRCE_ALLOW_REMOTE=1`) and is announced in the terminal and in a UI banner. Never reinstate a default of `0.0.0.0`.
-14. **Shiny custom-message handlers take exactly one argument.** Shiny throws otherwise, *during registration*, which silently disables every handler registered after it. Register through the `registerHandler()` helper in `www/rtrce-editor.js`, never `Shiny.addCustomMessageHandler()` directly.
-15. **One place names a colour: `www/rtrce-theme.css`.** No literal hex in R or in component markup; add a token instead. The themed stylesheet must also load *after* CodeMirror's and stay scoped (`.rtrce-app .CodeMirror`), because CodeMirror sets an editor background at equal specificity.
-16. **Never read a reactive at module registration time.** `reactiveVal(state$wd())` outside a reactive context makes Shiny abort the whole session ("Operation not allowed without an active reactive context") and every pane silently never paints. Build such values lazily, as `studio_files_pane_server()` does with `navigated`/`current_dir`.
+11. **The session engine is Shiny-free.** `R/runtime.R` must never depend on `shiny` or reach into reactive state. The Studio worker daemon and `rtrce run` both call `session_evaluate()`, so a behaviour change in one is a behaviour change in the other.
+12. **A hosted session may never kill or block its host.** `R/runtime.R` guards `quit()`/`q()` and refuses to print an interactive server block. Anything else that could terminate or indefinitely block the Studio process belongs behind the same kind of guard, with an explanation the user can read.
+13. **R-TRCE Studio is exclusively the native Electron desktop application.** Launchers, desktop entries, and `rtrce studio` must directly execute the Electron desktop shell with zero web browser popups. Pre-built standalone release archives bundle native Electron runtimes so end users require zero build steps.
 
 
 ---

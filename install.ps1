@@ -347,10 +347,9 @@ Quick Start Commands (in PowerShell or CMD):
   rtrce quiz script.R         Generate comprehension quiz
   rtrce explain script.R      Architectural explanation & dependency flow
   rtrce help                  Every command and option
-  rtrce-react-studio          Launch React local studio (Monaco & Asterov UI)
-  rtrce-studio                Launch interactive Shiny web studio
+  rtrce-studio                Launch R-TRCE Studio (Monaco Editor & Asterov UI)
 
-You can also launch "R-TRCE React Studio" or "R-TRCE Code Assistant Studio" directly from your Desktop or Start Menu!
+You can also launch "R-TRCE Studio" directly from your Desktop or Start Menu!
 
 NOTE: The older names 'r-trce' and 'r-trce-studio' still work as aliases.
 NOTE: You may need to restart your terminal for PATH changes to take effect.

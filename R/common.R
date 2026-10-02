@@ -289,19 +289,18 @@ required_packages <- function() {
   c("jsonlite")
 }
 
-# Packages that make the Studio better but are never required: when one is
-# absent the Studio falls back to a plainer rendering instead of failing.
+# Packages that enhance the CLI or environment if present, but are never required.
 # /**
 #  * @trce-id trce-common-011
 #  * @trce-who Core Application Logic / Internal Caller
-#  * @trce-what Returns the list of optional R packages that enhance the Studio but are never required
-#  * @trce-where common.R -> optional_packages | Upstream: run_doctor(), app.R | Downstream: missing_packages
-#  * @trce-when Read during environment diagnostics and Studio startup
-#  * @trce-why Keeps optional extras documented and distinguishable from hard requirements, so a missing DT degrades the UI instead of blocking it
+#  * @trce-what Returns the list of optional R packages that enhance capabilities if present
+#  * @trce-where common.R -> optional_packages | Upstream: run_doctor() | Downstream: missing_packages
+#  * @trce-when Read during environment diagnostics
+#  * @trce-why Keeps optional extras documented and distinguishable from hard requirements
 #  * @trce-how Returns a fixed character vector disjoint from required_packages()
 #  */
 optional_packages <- function() {
-  c("shiny", "DT")
+  character(0)
 }
 
 # Which of these packages are not installed, from the caller's point of view.
