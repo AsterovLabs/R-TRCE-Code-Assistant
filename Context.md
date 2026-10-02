@@ -155,6 +155,12 @@ namespace (`trce-<module>-NNN`) so IDs stay unique across the whole repository.
 | `trce-runtime-015` | `session_render_report()` | utility_function | `R/runtime.R` (L755-L945) |
 | `trce-runtime-016` | `session_run_terminal_cmd()` | utility_function | `R/runtime.R` (L957-L986) |
 | `trce-runtime-017` | `session_open_project()` | utility_function | `R/runtime.R` (L998-L1042) |
+| `trce-teach-001` | `concept_tags_for_lines()` | utility_function | `R/teach.R` (L71-L148) |
+| `trce-teach-002` | `explain_code_line()` | utility_function | `R/teach.R` (L157-L283) |
+| `trce-teach-003` | `explain_r_error()` | utility_function | `R/teach.R` (L308-L331) |
+| `trce-teach-004` | `describe_run()` | utility_function | `R/teach.R` (L341-L400) |
+| `trce-teach-005` | `get_teach_errors()` | utility_function | `R/teach.R` (L291-L304) |
+| `trce-teach-006` | `get_teach_concepts()` | utility_function | `R/teach.R` (L51-L64) |
 
 Coverage is 100% of annotatable components in every source file, verified by
 `rtrce check <file>` and asserted by `tests/test_r_trce.R`.
@@ -232,89 +238,44 @@ has something to open in the Studio immediately. See `samples/README.md`.
 
 ---
 
-## 6. Live Session & Editor (Phase 1, recorded)
+## 6. Live Session & Native Desktop Studio
 
-The Studio could read, explain and document R code but never *run* it, which made it a report
-about R rather than a place to work in R. Phase 1 adds the missing half.
+The Studio is a full desktop IDE powered by Electron, React 18, and Monaco Editor. It combines high-performance client rendering with a persistent background R worker daemon (`r_worker.R`), providing sub-10ms AST inspection, live code execution, and pedagogical analysis.
 
 | Piece | What it does | Trace IDs |
 |-------|--------------|-----------|
-| `R/runtime.R` | A dependency-free R session: evaluates submitted code, captures printed values, `cat()` output, messages, warnings, errors and plots, and reports the workspace | `trce-rparse-015`, `trce-runtime-001` … `-010` |
-| `rtrce run <file>` | The same engine on the command line: prints the transcript, the workspace and where any plots were written | `trce-cli-003` route, `R/runtime.R` |
-| `R/editor_ops.R` | The IDE-style decisions, kept testable: which statement a Ctrl+Enter should run, how long the document is, how Up/Down walk history | `trce-rparse-016`, `trce-editor-001` … `-003` |
-| `R/studio_editor.R`, `R/studio_console.R` | The two panes: a CodeMirror editor bound to the working document, and a console sharing the same session | `trce-rparse-017`/`-018`, `trce-ui-editor-001`/`-002`, `trce-ui-console-001`/`-002` |
-| `www/` | Vendored CodeMirror 5.65.16 (MIT) plus the Shiny bridge, so the Studio works offline with no new R package | — (not R source, so not covered by the trace index) |
+| `studio/server/electron-main.js` | Native Electron desktop container, native menus, window lifecycle, `--no-sandbox` Linux flags | — |
+| `studio/server/server.js` | Express & WebSocket daemon: manages worker lifecycle, REST file I/O, dialog bridges, terminal runners | — |
+| `studio/server/r_worker.R` | Persistent background R worker: maintains live session, provides sub-10ms AST parsing, TRCE synthesis, and execution over stdio JSON-RPC | `trce-rparse-022`, `trce-worker-001` … `-005` |
+| `studio/client/` | React 18 + Monaco Editor workbench: Catppuccin theme, interactive console, AST & telemetry badges, Cassie tutor, plot gallery | — |
+| `R/runtime.R` | Dependency-free R session engine: evaluates submitted code, captures stdout, printed values, warnings, errors and plots | `trce-rparse-015`, `trce-runtime-001` … `-010` |
+| `rtrce run <file>` | Command-line execution runner using the same runtime engine: prints transcript, workspace and plots | `trce-cli-003` route, `R/runtime.R` |
+| `R/editor_ops.R` | IDE decisions kept testable: statement at a cursor, line counting, console history | `trce-rparse-016`, `trce-editor-001` … `-003` |
+| `R/teach.R` | Plain-language concept breakdown, line-by-line explanation, error decoder, and pedagogical concept tagging | `trce-rparse-020`, `trce-teach-001` … `-006` |
 
-Behavioural decisions worth remembering, each of which came from running real files rather than
-from theory:
+Behavioural decisions worth remembering:
 
 | Decision | Why |
 |----------|-----|
-| `quit()`/`q()` are shadowed in a hidden parent frame | One bundled sample ends a branch with `quit()`; unguarded it terminates the whole Studio process, taking every other session with it (`trce-runtime-010`) |
-| Printing a `shiny.appobj` is refused with an explanation | `samples/01_shiny_app.R` ends with `shinyApp(ui, server)`, and printing that starts a server and blocks the host |
-| Output is flushed by closing the sink before it is read | A line written without a trailing newline stays in the connection buffer, so `cat("x")` was silently dropped |
-| Every evaluation runs under `setTimeLimit` | A runaway loop in the Studio would otherwise wedge the process (verified: 1 s budget interrupts in 1.05 s) |
-| Plots are captured only when the display list proves something was drawn | Otherwise an untouched PNG device is presented as a plot |
-| The Studio binds to `127.0.0.1` unless `HOST` / `RTRCE_ALLOW_REMOTE=1` is set | The page runs R code; remote access must be a deliberate, announced choice (`trce-studio-005`) |
-| Custom-message handlers in `www/rtrce-editor.js` are registered through one helper | Shiny throws unless a handler takes exactly one argument, and that throw silently disabled every handler registered after it — the run highlight and gutter hints never fired |
-| Assets are served with a `?v=<mtime>` token | A cached `rtrce-editor.js` after an upgrade is indistinguishable from a broken feature (`trce-studio-007`) |
-| `count_lines()` rather than `strsplit()` | R drops a trailing empty field, so the status line disagreed with the editor's gutter by one line (`trce-editor-003`) |
+| Pre-bundled platform Electron binaries | Release archives bundle `electron.exe` (Windows) and `electron` (Linux) in `studio/server/node_modules/electron/dist/` so end users require zero Node.js/npm prerequisites |
+| `quit()`/`q()` are shadowed in a hidden parent frame | Unguarded `quit()` in user scripts would terminate the host worker process; shadowed to emit an explanation safely (`trce-runtime-010`) |
+| Printing a Shiny app object is refused with an explanation | Printing `shinyApp(...)` starts a server and blocks the headless worker host |
+| Output is flushed by closing the sink before it is read | Lines written without trailing newlines stay in buffer connections, so `cat("x")` is not dropped |
+| Every evaluation runs under `setTimeLimit` | A runaway loop in user code is cleanly interrupted without wedging the background daemon |
+| Plots are captured only when display list is non-empty | Avoids presenting empty PNG devices as captured user plots |
+| Daemon listens on loopback (`127.0.0.1:8084`) | Secure local-only IPC communication between Electron, backend daemon, and R worker |
 
 ---
 
-## 7. Design Language (Phase 2, recorded)
+## 7. Design Language & Tokens
 
-The Studio follows the Asterov "A" icon. That is a contract, not a preference: this screen is
-the first surface of what may become an agentic-first TRCE IDE, so it should look like Asterov
-before it looks like anything else. The tokens live in `www/rtrce-theme.css` and nowhere else.
+The Studio adheres to the Asterov design system. Tokens are defined in `www/rtrce-theme.css` and mirrored in the React client Tailwind/CSS configuration:
 
 | Token group | Values |
 |-------------|--------|
 | Surfaces (dark = Mocha) | `--rt-crust #11111b`, `--rt-mantle #181825`, `--rt-base #1e1e2e`, `--rt-surface-0/1/2` |
-| Surfaces (Cassie = Dark/Orange) | `--rt-crust #0e0d13`, `--rt-base #1b1a24`, white text/mane, orange blaze (`--rt-mauve #ff7828`), switched by `[data-rtrce-theme="cassie"]` |
-| Surfaces (light = Latte) | `--rt-base #eff1f5` and friends, switched by `[data-rtrce-theme="latte"]` on `<html>` |
+| Surfaces (light = Latte) | `--rt-base #eff1f5`, `--rt-surface-0/1/2`, switched via theme selector |
 | Accents | mauve `#cba6f7`, blue `#89b4fa`, teal `#94e2d5`, green `#a6e3a1`, yellow `#f9e2af`, peach `#fab387`, red `#f38ba8` |
-| Signature | `--rt-grad: linear-gradient(135deg, #cba6f7, #89b4fa, #94e2d5)` -- the icon's own stroke |
-| Type | Inter (UI), JetBrains Mono (code, numerics, status), Cinzel reserved for the wider suite |
-| Shape | radii 6 / 10 / 16 px, soft glows (`--rt-glow`), gradients only as accents or hairlines |
-
-Rules that follow from it:
-
-1. **Every colour comes from a token.** No literal hex in R or in component CSS; the theme is the
-   only place a colour is named. All themes are checked for WCAG contrast (body 11.3:1,
-   secondary 7.4:1, accents 7-13:1 on dark).
-2. **The gradient is an accent, never a surface.** It appears on the wordmark, the primary action,
-   a 1px hairline under the title bar, and as a soft wash behind the empty states.
-3. **Teaching surfaces are mauve.** `.rtrce-teach` exists so that an explanation never looks like
-   an error and an error never looks like an explanation.
-4. **The theme stylesheet loads last and is scoped** (`.rtrce-app .CodeMirror`). CodeMirror's own
-   CSS sets an editor background at equal specificity, so a theme that relies on source order
-   alone renders a white editor -- which is what happened before this was fixed.
-5. **Fonts are named, never downloaded.** No CDN, no bundled font files: offline use is a feature.
-6. **Layout metrics are shared with the splitter script.** `--rt-bottom-h` and `--rt-rail-w` are
-   read and written by both `www/rtrce-layout.js` and the R defaults, so a drag cannot disagree
-   with a default.
-
-The panes themselves follow RStudio's mental model, because familiarity is the point: source
-above console on the left, Environment / Files / Plots / Packages / Help in the right rail, the
-editor and console sharing one session, and the analysis views (walkthrough, annotations,
-explanation, AST, student studio) as tabs of the bottom panel rather than replacements for it.
-
-| Piece | What it does | Trace IDs |
-|-------|--------------|-----------|
-| Title bar | Asterov mark, document chip, live session pill, theme switch, shortcut sheet | `trce-rparse-019`, `trce-pane-006` |
-| Status bar | Working directory, cursor line, object and command counts, TRCE coverage, R version | `trce-pane-006` |
-| Files pane | Browse, open text files into the editor, change the session working directory | `trce-pane-001`, `trce-pane-002`, `trce-pane-007` |
-| Plots pane | The newest captured plot, its history, and a full-size link | `trce-pane-003` |
-| Packages pane | What is installed, what this file imports, and what the tool requires | `trce-pane-004` |
-| Help pane | Shortcuts, the six questions, the vocabulary, how the panes fit together | `trce-pane-005` |
-| Splitters, theme, shortcuts | `www/rtrce-layout.js` -- browser-only, remembered in localStorage | -- |
-
-| `trce-rparse-020` | `teach.R` module | teaching_subsystem | `R/teach.R` |
-| `trce-teach-001` | `concept_tags_for_lines()` | utility_function | `R/teach.R` |
-| `trce-teach-002` | `explain_code_line()` | utility_function | `R/teach.R` |
-| `trce-teach-003` | `explain_r_error()` | utility_function | `R/teach.R` |
-| `trce-teach-004` | `describe_run()` | utility_function | `R/teach.R` |
-| `trce-teach-005` | `get_teach_errors()` | utility_function | `R/teach.R` |
-| `trce-teach-006` | `get_teach_concepts()` | utility_function | `R/teach.R` |
-| `trce-rparse-021` | `studio_learn_pane_server()` | shiny_server | `R/studio_learn.R` |
+| Signature | `--rt-grad: linear-gradient(135deg, #cba6f7, #89b4fa, #94e2d5)` -- Asterov icon gradient |
+| Type | Inter (UI), JetBrains Mono (code, numerics, status) |
+| Editor | Monaco Editor (VS Code core) themed with Asterov Catppuccin tokens |
