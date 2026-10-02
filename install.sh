@@ -297,30 +297,11 @@ fi
 exec "$R_BIN" "$INSTALL_DIR/r_trce.R" "$@"
 WRAPPER_EOF
 
-# rtrce-studio wrapper (interactive Studio)
-# rtrce-studio wrapper (interactive Studio - defaults to modern local desktop IDE)
+# rtrce-studio wrapper (Native Desktop Studio)
 cat << 'WRAPPER_EOF' > "$BIN_DIR/rtrce-studio"
 #!/usr/bin/env bash
 INSTALL_DIR="__INSTALL_DIR__"
-R_BIN="__RSCRIPT_BIN__"
-
-for arg in "$@"; do
-  if [ "$arg" = "--shiny" ] || [ "$arg" = "-s" ]; then
-    if [ ! -x "$R_BIN" ] && command -v Rscript >/dev/null 2>&1; then
-      R_BIN="$(command -v Rscript)"
-    fi
-    exec "$R_BIN" "$INSTALL_DIR/app.R"
-  fi
-done
-
-if [ -f "$INSTALL_DIR/start_react_studio.sh" ]; then
-  exec bash "$INSTALL_DIR/start_react_studio.sh" "$@"
-fi
-
-if [ ! -x "$R_BIN" ] && command -v Rscript >/dev/null 2>&1; then
-  R_BIN="$(command -v Rscript)"
-fi
-exec "$R_BIN" "$INSTALL_DIR/app.R" "$@"
+exec bash "$INSTALL_DIR/start_react_studio.sh" "$@"
 WRAPPER_EOF
 
 # rtrce-react-studio wrapper (React Local Studio)

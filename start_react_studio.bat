@@ -34,59 +34,58 @@ if not exist "%RSCRIPT_BIN%" (
 )
 echo [OK] Found Rscript: %RSCRIPT_BIN%
 
-:: 2. Locate node.exe
-set "NODE_BIN=node.exe"
-where node >nul 2>nul
-if %errorlevel% neq 0 (
-    if exist "%ProgramFiles%\nodejs\node.exe" (
-        set "NODE_BIN=%ProgramFiles%\nodejs\node.exe"
-    ) else (
-        echo ==================================================================
-        echo   [i] Note: Node.js was not detected on this computer.
-        echo   Launching interactive Shiny Studio workspace instead...
-        echo   (Install Node.js v18+ from https://nodejs.org to use React Studio)
-        echo ==================================================================
-        call "%~dp0start_studio.bat"
-        exit /b %ERRORLEVEL%
+:: 2. Locate Electron runtime
+set "ELECTRON_BIN="
+if exist "%~dp0studio\server\node_modules\electron\dist\electron.exe" (
+    set "ELECTRON_BIN=%~dp0studio\server\node_modules\electron\dist\electron.exe"
+)
+if not defined ELECTRON_BIN (
+    if exist "%~dp0studio\server\node_modules\.bin\electron.cmd" (
+        set "ELECTRON_BIN=%~dp0studio\server\node_modules\.bin\electron.cmd"
     )
 )
-echo [OK] Found Node.js: %NODE_BIN%
-
-:: 3. Check backend dependencies
-if not exist "%~dp0studio\server\node_modules\" (
-    echo [*] Installing backend dependencies...
-    cd /d "%~dp0studio\server"
-    call npm install --silent
-    cd /d "%~dp0"
+if not defined ELECTRON_BIN (
+    where electron >nul 2>nul
+    if not errorlevel 1 set "ELECTRON_BIN=electron"
 )
 
-:: 4. Check client build
+:: 3. If Electron is not yet installed and npm exists, install dependencies
+if not defined ELECTRON_BIN (
+    where npm >nul 2>nul
+    if not errorlevel 1 (
+        echo [*] Installing local desktop runtime dependencies...
+        cd /d "%~dp0studio\server"
+        call npm install --silent
+        cd /d "%~dp0"
+        if exist "%~dp0studio\server\node_modules\electron\dist\electron.exe" (
+            set "ELECTRON_BIN=%~dp0studio\server\node_modules\electron\dist\electron.exe"
+        )
+    )
+)
+
+if not defined ELECTRON_BIN (
+    echo [!] Error: Native desktop Electron runtime not found.
+    echo Please run 'npm install' inside studio\server or ensure internet access on first launch.
+    pause
+    exit /b 1
+)
+
+:: 4. Check client build exists
 if not exist "%~dp0studio\client\dist\" (
-    echo [*] Building React client...
-    cd /d "%~dp0studio\client"
-    call npm install --silent
-    call npm run build
-    cd /d "%~dp0"
+    where npm >nul 2>nul
+    if not errorlevel 1 (
+        echo [*] Building React client...
+        cd /d "%~dp0studio\client"
+        call npm install --silent
+        call npm run build
+        cd /d "%~dp0"
+    )
 )
 
 set "PORT=8084"
 set "HOST=127.0.0.1"
-
-echo ==================================================================
-echo   R-TRCE React Studio running at: http://%HOST%:%PORT%
-echo ==================================================================
-
 set "RSCRIPT_BIN=%RSCRIPT_BIN%"
-set "ELECTRON_BIN=%~dp0studio\server\node_modules\.bin\electron.cmd"
 
-if exist "%ELECTRON_BIN%" (
-    echo [*] Launching Native Desktop IDE...
-    call "%ELECTRON_BIN%" "%~dp0studio\server\electron-main.js"
-    exit /b %ERRORLEVEL%
-)
-
-:: Standalone App Window Fallback (Edge / Chrome)
-start msedge.exe --app="http://%HOST%:%PORT%" 2>nul || start chrome.exe --app="http://%HOST%:%PORT%" 2>nul || start http://%HOST%:%PORT%
-"%NODE_BIN%" "%~dp0studio\server\server.js"
-
-pause
+echo [*] Launching R-TRCE Studio Native Desktop IDE...
+call "%ELECTRON_BIN%" "%~dp0studio\server\electron-main.js" %*
+exit /b %ERRORLEVEL%

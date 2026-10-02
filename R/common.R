@@ -286,7 +286,7 @@ read_source_lines <- function(file_path) {
 #  * @trce-how Returns a fixed character vector that consumers diff against missing_packages()
 #  */
 required_packages <- function() {
-  c("jsonlite", "shiny")
+  c("jsonlite")
 }
 
 # Packages that make the Studio better but are never required: when one is
@@ -301,7 +301,7 @@ required_packages <- function() {
 #  * @trce-how Returns a fixed character vector disjoint from required_packages()
 #  */
 optional_packages <- function() {
-  c("DT")
+  c("shiny", "DT")
 }
 
 # Which of these packages are not installed, from the caller's point of view.

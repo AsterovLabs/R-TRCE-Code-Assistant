@@ -277,24 +277,14 @@ if not exist "%RSCRIPT_BIN%" (
     )
 )
 
-set "PORT=8083"
-set "HOST=127.0.0.1"
-
-echo Starting R-TRCE Code Assistant Studio on http://%HOST%:%PORT% ...
-start http://%HOST%:%PORT%
-"%RSCRIPT_BIN%" "%INSTALL_DIR%\app.R"
-"@
-Set-Content -Path "$binDir\rtrce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
-
-# rtrce-react-studio.cmd (React Local Studio)
-$rTrceReactStudioCmd = @"
+# rtrce-studio.cmd (Native Desktop Studio)
+$rTrceStudioCmd = @"
 @echo off
 setlocal
 call "$InstallDir\start_react_studio.bat" %*
 "@
-Set-Content -Path "$binDir\rtrce-react-studio.cmd" -Value $rTrceReactStudioCmd -Encoding ASCII
-
-# Legacy alias for the Studio launcher
+Set-Content -Path "$binDir\rtrce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
+Set-Content -Path "$binDir\rtrce-react-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
 Set-Content -Path "$binDir\r-trce-studio.cmd" -Value $rTrceStudioCmd -Encoding ASCII
 
 # 5. Add $binDir to User Environment PATH
@@ -320,36 +310,24 @@ if ($currentUserPath -notlike "*$binDir*") {
 try {
     $wshShell = New-Object -ComObject WScript.Shell
     
-    # Desktop Shortcut (Shiny Studio)
+    # Desktop Shortcut (Native Desktop Studio)
     $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
     if ($desktopPath -and (Test-Path $desktopPath)) {
-        $shortcutDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE Code Assistant Studio.lnk")
+        $shortcutDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE Studio.lnk")
         $shortcutDesktop.TargetPath = "$binDir\rtrce-studio.cmd"
         $shortcutDesktop.WorkingDirectory = $InstallDir
-        $shortcutDesktop.Description = "R-TRCE Code Assistant Interactive Studio & Guided Walkthrough"
+        $shortcutDesktop.Description = "R-TRCE Code Assistant Native Desktop Studio"
         $shortcutDesktop.Save()
-
-        $shortcutReactDesktop = $wshShell.CreateShortcut("$desktopPath\R-TRCE React Studio.lnk")
-        $shortcutReactDesktop.TargetPath = "$binDir\rtrce-react-studio.cmd"
-        $shortcutReactDesktop.WorkingDirectory = $InstallDir
-        $shortcutReactDesktop.Description = "R-TRCE Code Assistant React Local Studio (Monaco Editor)"
-        $shortcutReactDesktop.Save()
     }
     
     # Start Menu Shortcut
     $startMenuPrograms = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
     if ($startMenuPrograms -and (Test-Path $startMenuPrograms)) {
-        $shortcutStart = $wshShell.CreateShortcut("$startMenuPrograms\R-TRCE Code Assistant Studio.lnk")
+        $shortcutStart = $wshShell.CreateShortcut("$startMenuPrograms\R-TRCE Studio.lnk")
         $shortcutStart.TargetPath = "$binDir\rtrce-studio.cmd"
         $shortcutStart.WorkingDirectory = $InstallDir
-        $shortcutStart.Description = "R-TRCE Code Assistant Interactive Studio & Guided Walkthrough"
+        $shortcutStart.Description = "R-TRCE Code Assistant Native Desktop Studio"
         $shortcutStart.Save()
-
-        $shortcutReactStart = $wshShell.CreateShortcut("$startMenuPrograms\R-TRCE React Studio.lnk")
-        $shortcutReactStart.TargetPath = "$binDir\rtrce-react-studio.cmd"
-        $shortcutReactStart.WorkingDirectory = $InstallDir
-        $shortcutReactStart.Description = "R-TRCE Code Assistant React Local Studio (Monaco Editor)"
-        $shortcutReactStart.Save()
     }
     
     Write-Host "Created Desktop & Start Menu shortcuts." -ForegroundColor Green

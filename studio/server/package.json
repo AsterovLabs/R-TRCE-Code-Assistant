@@ -19,10 +19,8 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "cors": "^2.8.5",
+    "electron": "^44.5.1",
     "express": "^4.21.2",
     "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "electron": "^44.5.1"
   }
 }

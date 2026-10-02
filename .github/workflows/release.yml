@@ -31,8 +31,9 @@ jobs:
           cd ../..
 
           echo "Installing Studio Backend Dependencies..."
+          # Installing Studio Backend Dependencies including Electron
           cd studio/server
-          npm ci --omit=dev || npm install --omit=dev
+          npm install
           cd ../..
 
       - name: Create Release Bundles
@@ -42,24 +43,39 @@ jobs:
 
           mkdir -p dist/linux dist/macos dist/windows
 
-          # 1. Linux Bundle
+          # 1. Linux Bundle (contains Linux Electron runtime)
           mkdir -p dist/linux/rtrce-code-assistant
           cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/linux/rtrce-code-assistant/
           rm -rf dist/linux/rtrce-code-assistant/studio/client/node_modules
           chmod +x dist/linux/rtrce-code-assistant/r_trce.R dist/linux/rtrce-code-assistant/app.R dist/linux/rtrce-code-assistant/start_studio.sh dist/linux/rtrce-code-assistant/start_react_studio.sh dist/linux/rtrce-code-assistant/install.sh
+          if [ -f dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist/electron ]; then
+            chmod +x dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist/electron
+          fi
           tar -czf dist/rtrce-code-assistant-linux-all.tar.gz -C dist/linux rtrce-code-assistant
 
-          # 2. macOS Bundle
+          # 2. macOS Bundle (inject macOS Electron runtime)
           mkdir -p dist/macos/rtrce-code-assistant
           cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/macos/rtrce-code-assistant/
           rm -rf dist/macos/rtrce-code-assistant/studio/client/node_modules
+          echo "Injecting macOS Electron desktop runtime..."
+          curl -fsSL https://github.com/electron/electron/releases/download/v44.5.1/electron-v44.5.1-darwin-x64.zip -o electron-mac.zip
+          mkdir -p dist/macos/rtrce-code-assistant/studio/server/node_modules/electron/dist
+          rm -rf dist/macos/rtrce-code-assistant/studio/server/node_modules/electron/dist/*
+          unzip -q electron-mac.zip -d dist/macos/rtrce-code-assistant/studio/server/node_modules/electron/dist/
+          rm electron-mac.zip
           chmod +x dist/macos/rtrce-code-assistant/r_trce.R dist/macos/rtrce-code-assistant/app.R dist/macos/rtrce-code-assistant/start_studio.sh dist/macos/rtrce-code-assistant/start_react_studio.sh dist/macos/rtrce-code-assistant/install.sh
           tar -czf dist/rtrce-code-assistant-macos-all.tar.gz -C dist/macos rtrce-code-assistant
 
-          # 3. Windows 10 & 11 Bundle
+          # 3. Windows 10 & 11 Bundle (inject Windows Electron runtime)
           mkdir -p dist/windows/rtrce-code-assistant
           cp -r r_trce.R app.R start_studio.bat start_react_studio.bat start_react_studio.ps1 install.bat install.ps1 README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/windows/rtrce-code-assistant/
           rm -rf dist/windows/rtrce-code-assistant/studio/client/node_modules
+          echo "Injecting Windows Electron desktop runtime..."
+          curl -fsSL https://github.com/electron/electron/releases/download/v44.5.1/electron-v44.5.1-win32-x64.zip -o electron-win.zip
+          mkdir -p dist/windows/rtrce-code-assistant/studio/server/node_modules/electron/dist
+          rm -rf dist/windows/rtrce-code-assistant/studio/server/node_modules/electron/dist/*
+          unzip -q electron-win.zip -d dist/windows/rtrce-code-assistant/studio/server/node_modules/electron/dist/
+          rm electron-win.zip
           zip -r dist/rtrce-code-assistant-windows-all.zip dist/windows/rtrce-code-assistant
 
           # Standalone installer scripts and license for direct download
@@ -88,10 +104,10 @@ jobs:
           body: |
             ## R-TRCE Code Assistant Release ${{ github.ref_name }}
             
-            Multi-platform distribution of R-TRCE Code Assistant with **both** local studios pre-bundled and ready to run:
-            - **New React Local Studio**: Powered by Monaco Editor, Asterov Catppuccin theme, live TRCE telemetry badges, AST archetype explorer, interactive R REPL, and plot gallery.
-            - **Interactive Shiny Studio**: The classic Shiny web workspace.
-            - **CLI Router**: Complete architectural analysis, 6-point TRCE doc-comment synthesizer, and pitfall sentinel.
+            Multi-platform native desktop release of R-TRCE Code Assistant:
+            - **Native Desktop Studio**: Local Electron desktop IDE powered by Monaco Editor, Asterov Catppuccin theme, live TRCE telemetry badges, polyglot AST archetype explorer (R, Python, JavaScript), interactive REPL, and plot gallery.
+            - **Zero Prerequisites**: Desktop Electron runtimes are bundled directly in the releases for Windows and Linux — no system Node.js or browser needed.
+            - **CLI Router**: Complete architectural analysis, 6-point TRCE doc-comment synthesizer, and student pitfall sentinel.
             
             ---
             

@@ -291,7 +291,7 @@ assert("leading_banner_lines() returns nothing for a code-first file",
 # The dependency manifest (R/common.R section 6) is the single list the doctor
 # and both installers read, so its two categories must stay meaningful.
 assert("required_packages() names the packages the tool cannot run without",
-       setequal(required_packages(), c("jsonlite", "shiny")))
+       setequal(required_packages(), c("jsonlite")))
 assert("optional_packages() never overlaps required_packages()",
        length(intersect(required_packages(), optional_packages())) == 0)
 assert("missing_packages() reports nothing for an installed base package",

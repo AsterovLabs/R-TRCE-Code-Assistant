@@ -9,36 +9,4 @@
 
 title R-TRCE Code Assistant Studio
 cd /d "%~dp0"
-
-set "RSCRIPT_BIN=Rscript.exe"
-
-where Rscript >nul 2>nul
-if %errorlevel% neq 0 (
-    :: Try standard Program Files path
-    for /d %%D in ("%ProgramFiles%\R\R-*") do (
-        if exist "%%D\bin\Rscript.exe" set "RSCRIPT_BIN=%%D\bin\Rscript.exe"
-    )
-)
-
-if not exist "%RSCRIPT_BIN%" (
-    where Rscript >nul 2>nul
-    if %errorlevel% neq 0 (
-        echo [!] Error: Rscript.exe not found.
-        echo Please ensure R is installed from https://cran.r-project.org/
-        pause
-        exit /b 1
-    )
-)
-
-set "PORT=8083"
-set "HOST=127.0.0.1"
-
-echo ==================================================================
-echo   Starting R-TRCE Code Assistant Interactive Studio
-echo   Access at: http://%HOST%:%PORT%
-echo ==================================================================
-
-start http://%HOST%:%PORT%
-"%RSCRIPT_BIN%" "%~dp0app.R"
-
-pause
+call "%~dp0start_react_studio.bat" %*
