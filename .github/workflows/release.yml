@@ -34,6 +34,7 @@ jobs:
           # Installing Studio Backend Dependencies including Electron
           cd studio/server
           npm install
+          node node_modules/electron/install.js || true
           cd ../..
 
       - name: Create Release Bundles
@@ -47,6 +48,13 @@ jobs:
           mkdir -p dist/linux/rtrce-code-assistant
           cp -r r_trce.R app.R start_studio.sh start_react_studio.sh install.sh README.md LICENSE AGENTS.md Context.md R samples registry www studio dist/linux/rtrce-code-assistant/
           rm -rf dist/linux/rtrce-code-assistant/studio/client/node_modules
+          if [ ! -f dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist/electron ]; then
+            echo "Downloading Linux Electron desktop runtime directly..."
+            curl -fsSL https://github.com/electron/electron/releases/download/v44.5.1/electron-v44.5.1-linux-x64.zip -o electron-linux.zip
+            mkdir -p dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist
+            unzip -q electron-linux.zip -d dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist/
+            rm electron-linux.zip
+          fi
           chmod +x dist/linux/rtrce-code-assistant/r_trce.R dist/linux/rtrce-code-assistant/app.R dist/linux/rtrce-code-assistant/start_studio.sh dist/linux/rtrce-code-assistant/start_react_studio.sh dist/linux/rtrce-code-assistant/install.sh
           if [ -f dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist/electron ]; then
             chmod +x dist/linux/rtrce-code-assistant/studio/server/node_modules/electron/dist/electron
